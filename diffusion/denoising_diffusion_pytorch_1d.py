@@ -269,7 +269,7 @@ class Unet1D(nn.Module):
         input_channels = channels * (2 if self_condition else 1)
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3, dilation=1, bias=True)
+        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3,bias=True)# dilation=1, bias=True)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))

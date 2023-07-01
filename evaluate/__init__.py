@@ -1,1 +1,1 @@
-from plot_utils import plot_np
+from .plot_utils import plot_np,plot_two_np

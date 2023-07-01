@@ -1,11 +1,23 @@
 import torch
 import numpy as np
 from diffusion.denoising_diffusion_pytorch_1d import Unet1D, GaussianDiffusion1D
-from dataset.CWRU import CWRU
+from dataset import *
 from torch.utils.data import DataLoader
 from torch.optim import Adam,AdamW
 import torch.nn.functional as F
 from evaluate import *
+import datetime
+import os
+import pandas as pd
+
+# Specify your directory here
+output_dir = "./output"
+# Check if the output directory exists
+if not os.path.exists(output_dir):
+    # If not, create it
+    os.makedirs(output_dir)
+
+cur_time=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -20,36 +32,57 @@ def get_mean_dev(y):
 
 Batch_Size=128
 
-data_dir = "/home/lucian/Documents/datas/CW"
-normlizetype = '0-1'
-data_set=CWRU(data_dir, normlizetype)
-datasets={}
-# datasets['train'], datasets['val'] = data_set.data_preprare()
-k=0
-datasets['train']= data_set.data_ch(ch=k)
-cw_data=[]
+
+# ## test CW data
+# data_dir = "/home/lucian/Documents/datas/CW"
+# normlizetype = '1-1'
+# k=5
+# data_set=CWRU(data_dir, normlizetype,is_train=True,ch=k)
+# datasets={}
+# # datasets['train'], datasets['val'] = data_set.data_preprare()
+#
+# datasets['train']= data_set
+# cw_data=[]
+# for i in datasets['train']:
+#     cw_data.append(i[0])
+# cw_np=np.array(cw_data)
+#
+# cw_path=os.path.join(output_dir,cur_time+'_ch'+str(k)+'_ori.png')
+# plot_np(cw_np,path= None,show_mode=False)
+
+# test SQ
+ori_root = '/home/lucian/Documents/datas/Graduate_data/SQdata/dataframe.csv'
+ori_csv_pd = pd.read_csv(ori_root)
+# get indicted label data
+labels_dict = create_labels_dict(rpm=9, state='inner3')
+
+label_index = 'state'
+normlizetype = '1-1'
+datasets_train = SQ(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, data_num='all')
+datasets = {}
+datasets['train']= datasets_train
+SQ_data=[]
 for i in datasets['train']:
-    cw_data.append(i[0])
-cw_np=np.array(cw_data)
-print(cw_np.shape)
-gradient = np.gradient(cw_np,axis=2)
-print(gradient.shape)
-plot_np(gradient)
-plot_np(cw_np,show_mel=True)
+    SQ_data.append(i[0])
 
-cw_m,cw_v=get_mean_dev(cw_np)
+# random sample Batch_size samples
+indices = np.random.choice(len(SQ_data), size=Batch_Size, replace=False)
+SQ_np = np.array(SQ_data)[indices]
 
+
+condition=os.path.join(output_dir,cur_time+'_rpm'+str(labels_dict['rpm'])+'_'+labels_dict['state'])
+SQ_path=condition+'_ori.png'
+plot_np(SQ_np,path= None,show_mode=False)
 
 train_dataloader = DataLoader(datasets["train"], batch_size=Batch_Size, shuffle=True)
 # val_dataloader = DataLoader(datasets["val"], batch_size=Batch_Size, shuffle=False)
 
-
 def linear_beta_schedule(timesteps):
-    beta_start = 0.0001
-    beta_end = 0.02
+    beta_start = 0.000001
+    beta_end = 0.01
     return torch.linspace(beta_start, beta_end, timesteps)
 
-timesteps = 800
+timesteps = 1000
 
 # define beta schedule
 betas = linear_beta_schedule(timesteps=timesteps)
@@ -121,7 +154,9 @@ diffusion = GaussianDiffusion1D(
     model,
     seq_length = 1024,
     timesteps = 1000,
-    objective = 'pred_v'
+    objective = 'pred_v',
+    beta_schedule='linear',
+    auto_normalize=False
 )
 
 diffusion.to(device)
@@ -139,7 +174,7 @@ for epoch in range(epochs):
       # Algorithm 1 line 3: sample t uniformally for every example in the batch
       t = torch.randint(0, timesteps, (batch_size,), device=device).long()
 
-      loss = p_losses(model, batch, t, loss_type="l1")
+      loss = p_losses(model, batch, t, loss_type="huber")
 
       if step % 100 == 0:
         learning_rate = optimizer.param_groups[0]['lr']
@@ -151,7 +186,12 @@ for epoch in range(epochs):
 
 sampled_seq = diffusion.sample(batch_size = Batch_Size)
 # for i in range(16):
-fig=plt.figure(figsize=(12,3))
-plot_np(sampled_seq.cuda().data.cpu().numpy(),show_mel=True)
+
+out_path=condition+'_out.png'
+out_np=sampled_seq.cuda().data.cpu().numpy()
+# plot_np(out_np,path= None, show_mode=False)
+plot_two_np(out_np,SQ_np,path=condition+'_time.png',show_mode='time')
+plot_two_np(out_np,SQ_np,path=condition+'_fft.png',show_mode='fft')
+
 df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
 # print(sampled_seq.shape) # (4, 32, 128)t

@@ -1,13 +1,14 @@
 import os
 import pandas as pd
 from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
-from utils.SequenceDatasets import dataset
-from utils.sequence_aug import *
+from utils.sequence_transform import *
+from torch.utils.data import Dataset,DataLoader,Subset
 from tqdm import tqdm
-
+import torch
+from sklearn.model_selection import StratifiedShuffleSplit
 
 signal_size = 1024
+from collections import Counter
 
 
 datasetname = ["12k Drive End Bearing Fault Data", "12k Fan End Bearing Fault Data", "48k Drive End Bearing Fault Data",
@@ -41,49 +42,48 @@ dataname11 = ["111.mat", "124.mat", "137.mat", "176.mat", "191.mat", "203.mat", 
 dataname12 = ["112.mat", "125.mat", "138.mat", "177.mat", "192.mat", "204.mat", "217.mat", "253.mat",
               "265.mat"]  # 1730rpm
 # label
-label = [1, 2, 3, 4, 5, 6, 7, 8, 9]  # The failure data is labeled 1-9
+label_all = [1, 2, 3, 4, 5, 6, 7, 8, 9]  # The failure data is labeled 1-9
 axis = ["_DE_time", "_FE_time", "_BA_time"]
 
 
 # generate Training Dataset and Testing Dataset
-def get_files(root, test=False):
+def get_files(root, test=False,ch=None):
     '''
     This function is used to generate the final training set and test set.
     root:The location of the data set
     normalname:List of normal data
     dataname:List of failure data
     '''
-    data_root1 = os.path.join('/tmp', root, datasetname[3])
-    data_root2 = os.path.join('/tmp', root, datasetname[0])
+    if ch is None:
+        data_root1 = os.path.join('/tmp', root, datasetname[3])
+        data_root2 = os.path.join('/tmp', root, datasetname[0])
 
-    path1 = os.path.join('/tmp', data_root1, normalname[0])  # 0->1797rpm ;1->1772rpm;2->1750rpm;3->1730rpm
-    data, lab = data_load(path1, axisname=normalname[0],label=0)  # nThe label for normal data is 0
-
-    for i in tqdm(range(len(dataname1))):
-        path2 = os.path.join('/tmp', data_root2, dataname1[i])
-
-        data1, lab1 = data_load(path2, dataname1[i], label=label[i])
-        data += data1
-        lab += lab1
-    return [data, lab]
-
-def get_files_ch(root, test=False,ch=0):
-    '''
-    This function is used to generate the final training set and test set.
-    root:The location of the data set
-    normalname:List of normal data
-    dataname:List of failure data
-    '''
-    data_root1 = os.path.join('/tmp', root, datasetname[3])
-    data_root2 = os.path.join('/tmp', root, datasetname[0])
-
-    path1 = os.path.join('/tmp', data_root1, normalname[0])  # 0->1797rpm ;1->1772rpm;2->1750rpm;3->1730rpm
-    if ch ==0:
+        path1 = os.path.join('/tmp', data_root1, normalname[0])  # 0->1797rpm ;1->1772rpm;2->1750rpm;3->1730rpm
         data, lab = data_load(path1, axisname=normalname[0],label=0)  # nThe label for normal data is 0
+
+        for i in tqdm(range(len(dataname1))):
+            path2 = os.path.join('/tmp', data_root2, dataname1[i])
+
+            data1, lab1 = data_load(path2, dataname1[i], label=label_all[i])
+            data += data1
+            lab += lab1
+        return [data, lab]
     else:
-        path2 = os.path.join('/tmp', data_root2, dataname1[ch])
-        data, lab = data_load(path2, dataname1[ch], label=label[ch])
-    return [data, lab]
+        data_root1 = os.path.join('/tmp', root, datasetname[3])
+        data_root2 = os.path.join('/tmp', root, datasetname[0])
+        if ch==0:
+            path1 = os.path.join('/tmp', data_root1, normalname[0])  # 0->1797rpm ;1->1772rpm;2->1750rpm;3->1730rpm
+            data, lab = data_load(path1, axisname=normalname[0], label=0)  # nThe label for normal data is 0
+            return [data, lab]
+        elif ch>0 and ch<=9:
+            print('ch label is',ch)
+            path2 = os.path.join('/tmp', data_root2, dataname1[ch-1])
+
+            data, lab = data_load(path2, dataname1[ch-1], label=label_all[ch-1])
+
+            return [data, lab]
+        else :
+            raise('ch is not exist')
 
 
 def data_load(filename, axisname, label):
@@ -100,12 +100,20 @@ def data_load(filename, axisname, label):
     fl = loadmat(filename)[realaxis]
     data = []
     lab = []
-    start, end = 0, signal_size
-    while end <= fl.shape[0]:
-        data.append(fl[start:end])
-        lab.append(label)
-        start += signal_size
-        end += signal_size
+
+
+    data = [fl[start:end].reshape(1, signal_size) for start, end in zip(range(0, fl.shape[0], signal_size),
+                                                                        range(signal_size, fl.shape[0] + 1, signal_size))]
+    lab = [label] * len(data)
+
+    # return data, lab
+    #
+    # start, end = 0, signal_size
+    # while end <= fl.shape[0]:
+    #     data.append(fl[start:end].reshape(1,signal_size))
+    #     lab.append(label)
+    #     start += signal_size
+    #     end += signal_size
 
     return data, lab
 
@@ -113,64 +121,98 @@ def data_load(filename, axisname, label):
 def data_transforms(dataset_type="train", normlize_type="-1-1"):
     transforms = {
         'train': Compose([
-            Reshape(),
+            # Reshape(),
             Normalize(normlize_type),
-            RandomAddGaussian(),
-            RandomScale(),
-            RandomStretch(),
+            # RandomAddGaussian(),
+            # RandomScale(),
+            # RandomStretch(),
             # RandomCrop(),
             Retype()
 
         ]),
         'val': Compose([
-            Reshape(),
+            # Reshape(),
             Normalize(normlize_type),
             Retype()
         ])
     }
     return transforms[dataset_type]
 
-def train_test_split_order(data_pd, test_size=0.8, num_classes=10):
-    train_pd = pd.DataFrame(columns=('data', 'label'))
-    val_pd = pd.DataFrame(columns=('data', 'label'))
-    for i in range(num_classes):
-        data_pd_tmp = data_pd[data_pd['label'] == i].reset_index(drop=True)
-        test_num = np.floor(test_size * data_pd_tmp.shape[0]).astype(int)
-        train_pd = pd.concat([train_pd, data_pd_tmp.loc[:data_pd_tmp.shape[0]-test_num, ['data', 'label']]], ignore_index=True)
-        val_pd = pd.concat([val_pd, data_pd_tmp.loc[data_pd_tmp.shape[0]-test_num:, ['data', 'label']]], ignore_index=True)
-    return train_pd, val_pd
-
-class CWRU(object):
+class CWRU(Dataset):
     num_classes = 10
     inputchannel = 1
 
-    def __init__(self, data_dir,normlizetype):
+    def __init__(self, data_dir, normlizetype, is_train=True,ch=None):
         self.data_dir = data_dir
         self.normlizetype = normlizetype
+        self.is_train = is_train
 
-    def data_preprare(self, test=False):
+        list_data = get_files(self.data_dir, self.is_train,ch=ch)
+        self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
 
-        list_data = get_files(self.data_dir, test)
-        if test:
-            test_dataset = dataset(list_data=list_data, test=True, transform=None)
-            return test_dataset
+        if self.is_train:
+            self.seq_data = self.data_pd['data'].tolist()
+            self.labels = self.data_pd['label'].tolist()
+            self.transform = data_transforms('train', self.normlizetype)
         else:
-            data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
-            train_pd, val_pd = train_test_split_order(data_pd, test_size=0.2, num_classes= 10)
-            train_dataset = dataset(list_data=train_pd, transform=data_transforms('train',self.normlizetype))
-            val_dataset = dataset(list_data=val_pd, transform=data_transforms('val',self.normlizetype))
-            return train_dataset, val_dataset
+            self.seq_data = self.data_pd['data'].tolist()
+            self.labels = self.data_pd['label'].tolist()
+            self.transform = None
+        self.cls_num = set(list_data[1])
 
-    def data_ch(self,ch=None):
-        list_data = get_files_ch(self.data_dir, False,ch=ch)
-        data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
-        train_dataset = dataset(list_data=data_pd, transform=data_transforms('train', self.normlizetype))
-        return train_dataset
+    def __len__(self):
+        return len(self.data_pd)
+
+    def __getitem__(self, idx):
+        if self.is_train:
+            data = self.seq_data[idx]
+            label = self.labels[idx]
+
+            if self.transform:
+                data = self.transform(data)
+            return data, label
+        else:
+            data = self.seq_data[idx]
+            label = self.labels[idx]
+            if self.transform:
+                data = self.transform(data)
+            return data,label
+
+    def get_classes_num(self):
+        return len(self.cls_num),self.cls_num# num, name
+
+def counter_dataloader(data_loader):
+
+    label_counts = Counter()
+    for batch in data_loader:
+        _, labels = batch
+        for label in labels:
+            label_counts[label.item()] += 1  # 假设标签是一个张量，需要使用.item()将其转换为普通的Python数据类型
+    print('dataloader counter',label_counts)
+
+def get_loaders(train_dataset, seed, batch, val_ratio=0.2):
+    dataset_len = len(train_dataset)
+    labels = train_dataset.labels
+
+    # 使用 StratifiedShuffleSplit 进行标签分层随机划分
+    sss = StratifiedShuffleSplit(n_splits=1, test_size=val_ratio, random_state=seed)
+    train_indices, val_indices = next(sss.split(range(dataset_len), labels))
+
+    train_subset = Subset(train_dataset, train_indices)
+    val_subset = Subset(train_dataset, val_indices)
+
+    train_dataloader = DataLoader(train_subset, batch_size=batch, shuffle=True)
+    val_dataloader = DataLoader(val_subset, batch_size=batch, shuffle=False)
+    counter_dataloader(val_dataloader)
+    return train_dataloader, val_dataloader
+
 
 if __name__ == '__main__':
     data_dir="/home/lucian/Documents/datas/CW"
-    normlizetype='0-1'
+    normlizetype='mean-std'
     datasets={}
-    datasets['train'], datasets['val'] = CWRU(data_dir, normlizetype).data_preprare()
-    x=CWRU(data_dir, normlizetype).data_ch(ch=0)
-
+    datasets_train = CWRU(data_dir, normlizetype,is_train=True,ch=1)
+    train_dataloader,val_dataloader=get_loaders(datasets_train,seed=5, batch=16)
+    for id, (data,label) in enumerate(train_dataloader):
+        print(id,len(data),label)
+    datasets['test'] = CWRU(data_dir, normlizetype, is_train=False)
