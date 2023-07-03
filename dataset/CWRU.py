@@ -139,13 +139,12 @@ def data_transforms(dataset_type="train", normlize_type="-1-1"):
     return transforms[dataset_type]
 
 class CWRU(Dataset):
-    num_classes = 10
-    inputchannel = 1
 
     def __init__(self, data_dir, normlizetype, is_train=True,ch=None):
         self.data_dir = data_dir
         self.normlizetype = normlizetype
         self.is_train = is_train
+        self.ch=self._get_ch(ch)
 
         list_data = get_files(self.data_dir, self.is_train,ch=ch)
         self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
@@ -181,6 +180,12 @@ class CWRU(Dataset):
     def get_classes_num(self):
         return len(self.cls_num),self.cls_num# num, name
 
+    def _get_ch(self,ch):
+        if ch is not None:
+            return ch
+        else :
+            raise('CW data ch is None')
+
 def counter_dataloader(data_loader):
 
     label_counts = Counter()
@@ -212,6 +217,7 @@ if __name__ == '__main__':
     normlizetype='mean-std'
     datasets={}
     datasets_train = CWRU(data_dir, normlizetype,is_train=True,ch=1)
+    ch=datasets_train.ch
     train_dataloader,val_dataloader=get_loaders(datasets_train,seed=5, batch=16)
     for id, (data,label) in enumerate(train_dataloader):
         print(id,len(data),label)

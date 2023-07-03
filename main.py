@@ -10,16 +10,6 @@ import datetime
 import os
 import pandas as pd
 
-# Specify your directory here
-output_dir = "./output"
-# Check if the output directory exists
-if not os.path.exists(output_dir):
-    # If not, create it
-    os.makedirs(output_dir)
-
-cur_time=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-
-device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def get_mean_dev(y):
     b=y.shape[0]
@@ -29,11 +19,18 @@ def get_mean_dev(y):
     # print(mean,variance)
     return mean , variance
 
+# Specify output directory here
+output_dir = "./output"
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
 
-Batch_Size=128
+# time
+cur_time=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
 
+#use gpu
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# ## test CW data
+# test CW data
 # data_dir = "/home/lucian/Documents/datas/CW"
 # normlizetype = '1-1'
 # k=5
@@ -51,28 +48,55 @@ Batch_Size=128
 # plot_np(cw_np,path= None,show_mode=False)
 
 # test SQ
-ori_root = '/home/lucian/Documents/datas/Graduate_data/SQdata/dataframe.csv'
-ori_csv_pd = pd.read_csv(ori_root)
-# get indicted label data
-labels_dict = create_labels_dict(rpm=9, state='inner3')
-
-label_index = 'state'
-normlizetype = '1-1'
-datasets_train = SQ(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, data_num='all')
-datasets = {}
-datasets['train']= datasets_train
-SQ_data=[]
-for i in datasets['train']:
-    SQ_data.append(i[0])
+# ori_root = '/home/lucian/Documents/datas/Graduate_data/SQdata/dataframe.csv'
+# ori_csv_pd = pd.read_csv(ori_root)
+# # get indicted label data
+# labels_dict = create_labels_dict(rpm=19, state='inner3')
+#
+# label_index = 'state'
+# normlizetype = '1-1'
+# datasets_train = SQ(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, data_num='all')
+# datasets = {}
+# datasets['train']= datasets_train
+# SQ_data=[]
+# for i in datasets['train']:
+#     SQ_data.append(i[0])
 
 # random sample Batch_size samples
-indices = np.random.choice(len(SQ_data), size=Batch_Size, replace=False)
-SQ_np = np.array(SQ_data)[indices]
 
 
-condition=os.path.join(output_dir,cur_time+'_rpm'+str(labels_dict['rpm'])+'_'+labels_dict['state'])
-SQ_path=condition+'_ori.png'
-plot_np(SQ_np,path= None,show_mode=False)
+
+# condition=os.path.join(output_dir,cur_time+'_rpm'+str(labels_dict['rpm'])+'_'+labels_dict['state'])
+
+Batch_Size=128
+norm_type = '1-1'
+index='CW'
+
+if index=='SQ':
+    datasets,SQ_data,cond=build_dataset(
+        dataset_type='SQ',
+        b=Batch_Size,
+        normlizetype=norm_type,
+        rpm=19,
+        state='inner3')
+    indices = np.random.choice(
+        len(SQ_data),
+        size=Batch_Size,
+        replace=False)
+    data_np = np.array(SQ_data)[indices]
+elif index=='CW':
+    datasets, data_np, cond = build_dataset(
+        dataset_type='CW',
+        normlizetype=norm_type,
+        ch=5)
+else:
+    datasets, data_np, cond = build_dataset(
+        dataset_type='CW',
+        normlizetype=norm_type,
+        ch=5)
+
+ori_path=os.path.join(output_dir,cur_time,cond+'_ori.png')
+plot_np(data_np,path= None,show_mode=False)
 
 train_dataloader = DataLoader(datasets["train"], batch_size=Batch_Size, shuffle=True)
 # val_dataloader = DataLoader(datasets["val"], batch_size=Batch_Size, shuffle=False)
@@ -187,11 +211,11 @@ for epoch in range(epochs):
 sampled_seq = diffusion.sample(batch_size = Batch_Size)
 # for i in range(16):
 
-out_path=condition+'_out.png'
+out_path=cond+'_out.png'
 out_np=sampled_seq.cuda().data.cpu().numpy()
 # plot_np(out_np,path= None, show_mode=False)
-plot_two_np(out_np,SQ_np,path=condition+'_time.png',show_mode='time')
-plot_two_np(out_np,SQ_np,path=condition+'_fft.png',show_mode='fft')
+plot_two_np(out_np,data_np,path=cond+'_time.png',show_mode='time')
+plot_two_np(out_np,data_np,path=cond+'_fft.png',show_mode='fft')
 
 df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
 # print(sampled_seq.shape) # (4, 32, 128)t
