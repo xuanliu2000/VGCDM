@@ -1,6 +1,8 @@
 import torch
 import numpy as np
-from diffusion.denoising_diffusion_pytorch_1d import Unet1D, GaussianDiffusion1D
+# from diffusion.diffusion_1d import Unet1D, GaussianDiffusion1D
+from diffusion.Unet1D import Unet1D
+from diffusion.diffusion_pytorch_id import GaussianDiffusion1D
 from dataset import *
 from torch.utils.data import DataLoader
 from torch.optim import Adam,AdamW
@@ -9,7 +11,7 @@ from evaluate import *
 import datetime
 import os
 import pandas as pd
-
+from pathlib import Path
 
 def get_mean_dev(y):
     b=y.shape[0]
@@ -25,52 +27,16 @@ if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
 # time
-cur_time=datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-
+cur_time=datetime.datetime.now().strftime('%Y_%m%d_%H%M%S')
+time_out_dir=os.path.join(output_dir,cur_time)
+if not os.path.exists(time_out_dir):
+    os.makedirs(time_out_dir)
 #use gpu
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-# test CW data
-# data_dir = "/home/lucian/Documents/datas/CW"
-# normlizetype = '1-1'
-# k=5
-# data_set=CWRU(data_dir, normlizetype,is_train=True,ch=k)
-# datasets={}
-# # datasets['train'], datasets['val'] = data_set.data_preprare()
-#
-# datasets['train']= data_set
-# cw_data=[]
-# for i in datasets['train']:
-#     cw_data.append(i[0])
-# cw_np=np.array(cw_data)
-#
-# cw_path=os.path.join(output_dir,cur_time+'_ch'+str(k)+'_ori.png')
-# plot_np(cw_np,path= None,show_mode=False)
-
-# test SQ
-# ori_root = '/home/lucian/Documents/datas/Graduate_data/SQdata/dataframe.csv'
-# ori_csv_pd = pd.read_csv(ori_root)
-# # get indicted label data
-# labels_dict = create_labels_dict(rpm=19, state='inner3')
-#
-# label_index = 'state'
-# normlizetype = '1-1'
-# datasets_train = SQ(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, data_num='all')
-# datasets = {}
-# datasets['train']= datasets_train
-# SQ_data=[]
-# for i in datasets['train']:
-#     SQ_data.append(i[0])
-
-# random sample Batch_size samples
-
-
-
-# condition=os.path.join(output_dir,cur_time+'_rpm'+str(labels_dict['rpm'])+'_'+labels_dict['state'])
-
 Batch_Size=128
 norm_type = '1-1'
-index='CW'
+index='SQ'
 
 if index=='SQ':
     datasets,SQ_data,cond=build_dataset(
@@ -78,22 +44,25 @@ if index=='SQ':
         b=Batch_Size,
         normlizetype=norm_type,
         rpm=19,
-        state='inner3')
+        state='outer3')
     indices = np.random.choice(
         len(SQ_data),
         size=Batch_Size,
         replace=False)
     data_np = np.array(SQ_data)[indices]
+    sr = 25600
 elif index=='CW':
     datasets, data_np, cond = build_dataset(
         dataset_type='CW',
         normlizetype=norm_type,
         ch=5)
+    sr = 12000
 else:
     datasets, data_np, cond = build_dataset(
         dataset_type='CW',
         normlizetype=norm_type,
         ch=5)
+    sr = 12000
 
 ori_path=os.path.join(output_dir,cur_time,cond+'_ori.png')
 plot_np(data_np,path= None,show_mode=False)
@@ -208,14 +177,29 @@ for epoch in range(epochs):
       loss.backward()
       optimizer.step()
 
+
+# save_model
+save_index=True
+if save_index is True:
+    model_path=time_out_dir
+    paths = [
+        f'./pretrained/{index}/best_{cur_time}_{cond}.pt',
+        f'./results/{index}/{cur_time}_{cond}.csv',
+    ]
+    for path in paths:
+        dirname = os.path.dirname(path)
+        Path(dirname).mkdir(parents=True, exist_ok=True)
+
+    torch.save(model.state_dict(), paths[0])
+
 sampled_seq = diffusion.sample(batch_size = Batch_Size)
 # for i in range(16):
 
 out_path=cond+'_out.png'
 out_np=sampled_seq.cuda().data.cpu().numpy()
 # plot_np(out_np,path= None, show_mode=False)
-plot_two_np(out_np,data_np,path=cond+'_time.png',show_mode='time')
-plot_two_np(out_np,data_np,path=cond+'_fft.png',show_mode='fft')
+plot_two_np(out_np,data_np,path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),show_mode='time',sample_rate=sr)
+plot_two_np(out_np,data_np,path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),show_mode='fft',sample_rate=sr)
 
 df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
 # print(sampled_seq.shape) # (4, 32, 128)t

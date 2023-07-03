@@ -25,7 +25,7 @@ def default(val, d):
     if exists(val):
         return val
     return d() if callable(d) else d
-
+#
 def identity(t, *args, **kwargs):
     return t
 
@@ -51,7 +51,7 @@ def convert_image_to_fn(img_type, image):
     return image
 
 # normalization functions
-
+#
 def normalize_to_neg_one_to_one(img):
     return img * 2 - 1
 
@@ -213,7 +213,7 @@ class LinearAttention(nn.Module):
         q = q.softmax(dim = -2)
         k = k.softmax(dim = -1)
 
-        q = q * self.scale        
+        q = q * self.scale
 
         context = torch.einsum('b h d n, b h e n -> b h d e', k, v)
 
