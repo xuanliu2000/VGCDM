@@ -7,8 +7,7 @@ from scipy.fftpack import fft
 mpl.rcParams['font.sans-serif'] = ['simhei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
-
-def plot_np(y, patch=8, path=None, show_mode='time', sample_rate=12000):
+def plot_np(y, z=None,patch=8, path=None, show_mode='time', sample_rate=12000):
     fre=1/sample_rate
     if show_mode=='mel':
         y = [np.squeeze(librosa.feature.melspectrogram(y=signal ,sr=sample_rate,n_fft=64,
@@ -51,15 +50,26 @@ def plot_np(y, patch=8, path=None, show_mode='time', sample_rate=12000):
             ax.plot(Y_fre, np.abs(half_Y), c=color[0], alpha=0.5)
 
         elif show_mode=='time':
-            t = np.linspace(0,fre, y[i].shape[-1])
+            t = np.linspace(0,fre, y[i].reshape(-1).shape[-1])
             ax.plot(t, y[i].reshape(-1), c=color[0])
             ax.set_yticks([])
+            if z is not None:
+                ax2=ax.twinx()
+                color2 = color[1]
+                ax2.set_ylabel('pulse', color=color2)
+                ax2.plot(t, z[i].reshape(-1), color=color2, alpha=0.5)
+                ax2.tick_params(axis='y', labelcolor=color2)
         else:
             # Not consider time
-            x = range(y.shape[-1])
-            ax.plot(x, y[i].reshape(-1), c=color[0])
-
+            t = np.linspace(0, fre,y[i].reshape(-1).shape[-1])
+            ax.plot(t, y[i].reshape(-1), c=color[0])
             ax.set_yticks([])
+            if z is not None:
+                ax2=ax.twinx()
+                color2 = color[1]
+                ax2.set_ylabel('pulse', color=color2)
+                ax2.plot(t, z[i].reshape(-1), color=color2, alpha=0.5)
+                ax2.tick_params(axis='y', labelcolor=color2)
         ax.set_xticks([])
         ax.set_xlabel('')
         ax.set_ylabel('')
@@ -84,7 +94,7 @@ def plot_np(y, patch=8, path=None, show_mode='time', sample_rate=12000):
     plt.show()
 
 
-def plot_two_np(x,y, patch=8, path=None,show_mode='time', sample_rate=12000):
+def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample_rate=12000):
     fre=1/sample_rate
     if show_mode=='time':
         L = min(y.shape[0],x.shape[0])
@@ -92,7 +102,7 @@ def plot_two_np(x,y, patch=8, path=None,show_mode='time', sample_rate=12000):
 
         fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 6, H * 2))
 
-        color = ['#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000']
+        color = ['#0074D9', '#FF69B4', '#0343DF', '#E50000']
 
         for i in range(L):
             row = i // patch
@@ -103,6 +113,18 @@ def plot_two_np(x,y, patch=8, path=None,show_mode='time', sample_rate=12000):
 
             ax.plot(t, y[i].reshape(-1), c=color[0], alpha=0.5)
             ax.plot(t, x[i].reshape(-1), c=color[1], alpha=0.5)
+            if z1 is not None:
+                ax2=ax.twinx()
+                color2 = color[3]
+                ax2.set_ylabel('pulse', color=color2)
+                ax2.plot(t, z1[i].reshape(-1), color=color2, alpha=0.5)
+                ax2.tick_params(axis='y', labelcolor=color2)
+            if z2 is not None:
+                ax3=ax.twinx()
+                color3 = color[2]
+                ax3.set_ylabel('pulse', color=color3)
+                ax3.plot(t, z2[i].reshape(-1), color=color3, alpha=0.5)
+                ax3.tick_params(axis='y', labelcolor=color3)
 
             ax.set_yticks([])
             ax.set_xticks([])

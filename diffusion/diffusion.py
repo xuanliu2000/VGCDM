@@ -139,6 +139,7 @@ class GaussianDiffusion1D(nn.Module):
 
         snr = alphas_cumprod / (1 - alphas_cumprod)
 
+
         if objective == 'pred_noise':
             loss_weight = torch.ones_like(snr)
         elif objective == 'pred_x0':
@@ -186,8 +187,8 @@ class GaussianDiffusion1D(nn.Module):
         posterior_log_variance_clipped = extract(self.posterior_log_variance_clipped, t, x_t.shape)
         return posterior_mean, posterior_variance, posterior_log_variance_clipped
 
-    def model_predictions(self, x, t, x_self_cond = None, clip_x_start = False, rederive_pred_noise = False):
-        model_output = self.model(x, t, x_self_cond)
+    def model_predictions(self, x, t, x_self_cond = None, cond=None,clip_x_start = False, rederive_pred_noise = False):
+        model_output = self.model(x, t, x_self_cond,cond)
         maybe_clip = partial(torch.clamp, min = -1., max = 1.) if clip_x_start else identity
 
         if self.objective == 'pred_noise':
@@ -211,8 +212,8 @@ class GaussianDiffusion1D(nn.Module):
 
         return ModelPrediction(pred_noise, x_start)
 
-    def p_mean_variance(self, x, t, x_self_cond = None, clip_denoised = True):
-        preds = self.model_predictions(x, t, x_self_cond)
+    def p_mean_variance(self, x, t, x_self_cond = None,cond=None, clip_denoised = True):
+        preds = self.model_predictions(x, t, x_self_cond,cond=cond)
         x_start = preds.pred_x_start
 
         if clip_denoised:
@@ -222,16 +223,21 @@ class GaussianDiffusion1D(nn.Module):
         return model_mean, posterior_variance, posterior_log_variance, x_start
 
     @torch.no_grad()
-    def p_sample(self, x, t: int, x_self_cond = None, clip_denoised = True):
+    def p_sample(self, x, t: int, x_self_cond = None,cond=None, clip_denoised = True):
         b, *_, device = *x.shape, x.device
         batched_times = torch.full((b,), t, device = x.device, dtype = torch.long)
-        model_mean, _, model_log_variance, x_start = self.p_mean_variance(x = x, t = batched_times, x_self_cond = x_self_cond, clip_denoised = clip_denoised)
+        model_mean, _, model_log_variance, x_start = self.p_mean_variance(
+            x = x,
+            t = batched_times,
+            x_self_cond = x_self_cond,
+            cond=cond,
+            clip_denoised = clip_denoised)
         noise = torch.randn_like(x) if t > 0 else 0. # no noise if t == 0
         pred_img = model_mean + (0.5 * model_log_variance).exp() * noise
         return pred_img, x_start
 
     @torch.no_grad()
-    def p_sample_loop(self, shape):
+    def p_sample_loop(self, shape,cond=None):
         batch, device = shape[0], self.betas.device
 
         img = torch.randn(shape, device=device)
@@ -240,7 +246,7 @@ class GaussianDiffusion1D(nn.Module):
 
         for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
             self_cond = x_start if self.self_condition else None
-            img, x_start = self.p_sample(img, t, self_cond)
+            img, x_start = self.p_sample(img, t, self_cond,cond=cond)
 
         img = self.unnormalize(img)
         return img
@@ -282,10 +288,10 @@ class GaussianDiffusion1D(nn.Module):
         return img
 
     @torch.no_grad()
-    def sample(self, batch_size = 16):
+    def sample(self, batch_size = 16,cond=None):
         seq_length, channels = self.seq_length, self.channels
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
-        return sample_fn((batch_size, channels, seq_length))
+        return sample_fn((batch_size, channels, seq_length),cond=cond)
 
     @torch.no_grad()
     def interpolate(self, x1, x2, t = None, lam = 0.5):

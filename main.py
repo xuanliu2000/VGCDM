@@ -1,8 +1,8 @@
 import torch
 import numpy as np
 # from diffusion.diffusion_1d import Unet1D, GaussianDiffusion1D
-from diffusion.Unet1D import Unet1D
-from diffusion.diffusion_pytorch_id import GaussianDiffusion1D
+from diffusion.Unet1D import Unet1D,Unet1D_crossatt
+from diffusion.diffusion import GaussianDiffusion1D
 from dataset import *
 from torch.utils.data import DataLoader
 from torch.optim import Adam,AdamW
@@ -36,7 +36,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 
 Batch_Size=128
 norm_type = '1-1'
-index='SQ'
+index='SQ_M'
 
 if index=='SQ':
     datasets,SQ_data,cond=build_dataset(
@@ -51,12 +51,31 @@ if index=='SQ':
         replace=False)
     data_np = np.array(SQ_data)[indices]
     sr = 25600
+
+elif index=='SQ_M':
+    datasets,SQ_data,cond,SQ_C=build_dataset(
+        dataset_type='SQ_M',
+        b=Batch_Size,
+        normlizetype=norm_type,
+        # rpm=19,
+        state='inner3',
+        data_num=25
+        )
+    indices = np.random.choice(
+        len(SQ_data),
+        size=Batch_Size,
+        replace=False)
+    data_np = np.array(SQ_data)[indices]
+    cond_np= np.array(SQ_C)[indices]
+    sr = 25600
+
 elif index=='CW':
     datasets, data_np, cond = build_dataset(
         dataset_type='CW',
         normlizetype=norm_type,
         ch=5)
     sr = 12000
+
 else:
     datasets, data_np, cond = build_dataset(
         dataset_type='CW',
@@ -65,7 +84,10 @@ else:
     sr = 12000
 
 ori_path=os.path.join(output_dir,cur_time,cond+'_ori.png')
-plot_np(data_np,path= None,show_mode=False)
+if '_M' in index:
+    plot_np(data_np,z=cond_np,path= None,show_mode=False)
+else:
+    plot_np(data_np,path= None,show_mode=False)
 
 train_dataloader = DataLoader(datasets["train"], batch_size=Batch_Size, shuffle=True)
 # val_dataloader = DataLoader(datasets["val"], batch_size=Batch_Size, shuffle=False)
@@ -111,12 +133,12 @@ def q_sample(x_start, t, noise=None):
     return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
 
-def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
+def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1",context=None):
     if noise is None:
         noise = torch.randn_like(x_start)
 
     x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
-    predicted_noise = denoise_model(x_noisy, t)
+    predicted_noise = denoise_model(x_noisy, t,context=context)
 
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise)
@@ -130,11 +152,20 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1"):
     return loss
 
 
-model = Unet1D(
-    dim = 32,
+# model = Unet1D(
+#     dim = 32,
+#     num_layers=4,
+#     dim_mults = (1, 2, 4, 8),
+#     channels = 1
+# )
+
+model = Unet1D_crossatt(
+    dim=32,
     num_layers=4,
-    dim_mults = (1, 2, 4, 8),
-    channels = 1
+    dim_mults=(1, 2, 4, 8),
+    context_dim=1024,
+    channels=1,
+    use_crossatt=True
 )
 
 model.to(device)
@@ -157,17 +188,17 @@ diffusion.to(device)
 epochs = 200
 
 for epoch in range(epochs):
-    for step, (inputs, labels) in enumerate(train_dataloader):
+    for step, (inputs, labels,context) in enumerate(train_dataloader):
       # print('batch',type(inputs))
       optimizer.zero_grad()
 
       batch_size = inputs.shape[0]
-      batch = inputs.to(device)
+      batch = inputs.to(device).float()
+      context = context.to(device).float()
 
       # Algorithm 1 line 3: sample t uniformally for every example in the batch
       t = torch.randint(0, timesteps, (batch_size,), device=device).long()
-
-      loss = p_losses(model, batch, t, loss_type="huber")
+      loss = p_losses(model, batch, t, loss_type="huber",context=context)
 
       if step % 100 == 0:
         learning_rate = optimizer.param_groups[0]['lr']
@@ -177,9 +208,8 @@ for epoch in range(epochs):
       loss.backward()
       optimizer.step()
 
-
-# save_model
-save_index=True
+# save_model check
+save_index=False
 if save_index is True:
     model_path=time_out_dir
     paths = [
@@ -192,14 +222,46 @@ if save_index is True:
 
     torch.save(model.state_dict(), paths[0])
 
-sampled_seq = diffusion.sample(batch_size = Batch_Size)
+if '_M' in index:
+    dataloader = DataLoader(datasets['train'], batch_size=Batch_Size, shuffle=True)
+    data_iter = iter(dataloader)
+
+    while True:
+        batch = next(data_iter)
+        conds = batch[2].to(device).float()
+        if conds.shape[0] == Batch_Size:
+            break
+        # process third_data
+    sampled_seq = diffusion.sample(batch_size = Batch_Size,cond=conds)
+else:
+    sampled_seq = diffusion.sample(batch_size = Batch_Size)
 # for i in range(16):
 
 out_path=cond+'_out.png'
 out_np=sampled_seq.cuda().data.cpu().numpy()
-# plot_np(out_np,path= None, show_mode=False)
-plot_two_np(out_np,data_np,path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),show_mode='time',sample_rate=sr)
-plot_two_np(out_np,data_np,path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),show_mode='fft',sample_rate=sr)
+
+# add condition in plot when use cross attention
+if '_M' in index:
+    plot_two_np(out_np,
+                data_np,
+                z1=conds.cuda().data.cpu().numpy(),
+                z2=cond_np,
+                path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),
+                show_mode='time',
+                sample_rate=sr)
+    plot_two_np(out_np,data_np,
+                path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),
+                show_mode='fft',
+                sample_rate=sr)
+else:
+    plot_two_np(out_np,data_np,
+                path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),
+                show_mode='time',
+                sample_rate=sr)
+    plot_two_np(out_np,data_np,
+                path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),
+                show_mode='fft',
+                sample_rate=sr)
 
 df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
 # print(sampled_seq.shape) # (4, 32, 128)t
