@@ -7,7 +7,7 @@ from scipy.fftpack import fft
 mpl.rcParams['font.sans-serif'] = ['simhei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
 
-def plot_np(y, z=None,patch=8, path=None, show_mode='time', sample_rate=12000):
+def plot_np(y, z=None,patch=8,  show_mode='time', sample_rate=12000,path=None,):
     fre=1/sample_rate
     if show_mode=='mel':
         y = [np.squeeze(librosa.feature.melspectrogram(y=signal ,sr=sample_rate,n_fft=64,
@@ -16,19 +16,19 @@ def plot_np(y, z=None,patch=8, path=None, show_mode='time', sample_rate=12000):
         L = len(y)
         H = L // patch if L % patch == 0 else L // patch + 1
 
-        fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 2, H * 2))
+        fig, axs = plt.subplots(H, patch, sharex=True,sharey=True, figsize=(patch * 2, H * 2))
     elif show_mode=='fft':
         L = y.shape[0]
         H = L // patch if L % patch == 0 else L // patch + 1
 
-        fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 6, H * 2))
+        fig, axs = plt.subplots(H, patch, sharex=True,sharey=True, figsize=(patch * 6, H * 2))
 
     else:
 
         L = y.shape[0]
         H = L // patch if L % patch == 0 else L // patch + 1
 
-        fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 6, H * 2))
+        fig, axs = plt.subplots(H, patch, sharex=True, sharey=True, figsize=(patch * 6, H * 2))
 
     color = ['#0074D9', '#000000', '#0343DF', '#006400', '#E50000','#FF69B4']
 
@@ -51,7 +51,7 @@ def plot_np(y, z=None,patch=8, path=None, show_mode='time', sample_rate=12000):
 
         elif show_mode=='time':
             t = np.linspace(0,fre, y[i].reshape(-1).shape[-1])
-            ax.plot(t, y[i].reshape(-1), c=color[0])
+            ax.plot(t, y[i].reshape(-1), c=color[0],alpha=0.5)
             ax.set_yticks([])
             if z is not None:
                 ax2=ax.twinx()
@@ -73,24 +73,21 @@ def plot_np(y, z=None,patch=8, path=None, show_mode='time', sample_rate=12000):
         ax.set_xticks([])
         ax.set_xlabel('')
         ax.set_ylabel('')
-
-    if show_mode=='mel':
-        fig.supxlabel('时间/秒', y=0.08, fontsize=16)
-        fig.supylabel('梅尔幅值', x=0.09, fontsize=16)
-        fig.subplots_adjust(wspace=0.1, hspace=0.1)
-    elif show_mode=='fft':
-        fig.supxlabel('频率/Hz', y=0.08, fontsize=16)
-        fig.supylabel('幅度', x=0.09, fontsize=16)
-        fig.subplots_adjust(wspace=0, hspace=0)
+    plt.tight_layout()
+    fig.subplots_adjust(wspace=0.2, hspace=0.1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+    fig.text(0.5, 0.04, '时间/秒', ha='center', va='center', fontsize=16)
+    if show_mode == 'mel':
+        fig.text(0.09, 0.5, '梅尔幅值', ha='center', va='center', rotation='vertical', fontsize=16)
+    elif show_mode == 'fft':
+        fig.text(0.09, 0.5, '幅度', ha='center', va='center', rotation='vertical', fontsize=16)
     else:
-        fig.supxlabel('时间/秒', y=0.08, fontsize=16)
-        fig.supylabel('振幅/g', x=0.09, fontsize=16)
-        fig.subplots_adjust(wspace=0, hspace=0)
+        fig.text(0.09, 0.5, '振幅/g', ha='center', va='center', rotation='vertical', fontsize=16)
 
     if path is not None:
         plt.savefig(path, dpi=300)
         print('photo is saved in {}'.format(path))
 
+    # plt.tight_layout()
     plt.show()
 
 
@@ -100,7 +97,7 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
         L = min(y.shape[0],x.shape[0])
         H = L // patch if L % patch == 0 else L // patch + 1
 
-        fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 6, H * 2))
+        fig, axs = plt.subplots(H, patch, sharex=True, sharey=True, figsize=(patch * 6, H * 2))
 
         color = ['#0074D9', '#FF69B4', '#0343DF', '#E50000']
 
@@ -130,11 +127,10 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
             ax.set_xticks([])
             ax.set_xlabel('')
             ax.set_ylabel('')
-
-            fig.supxlabel('时间/秒', y=0.08, fontsize=16)
-            fig.supylabel('振幅/g', x=0.09, fontsize=16)
-            fig.subplots_adjust(wspace=0, hspace=0)
-
+            plt.tight_layout()
+            fig.subplots_adjust(wspace=0.2, hspace=0.1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+            fig.text(0.5, 0.04, '时间/秒', ha='center', va='center', fontsize=16)
+            fig.text(0.09, 0.5, '振幅/g', ha='center', va='center', rotation='vertical', fontsize=16)
 
     elif show_mode == 'fft':
 
@@ -142,7 +138,7 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
 
         H = L // patch if L % patch == 0 else L // patch + 1
 
-        fig, axs = plt.subplots(H, patch, sharex=True, figsize=(patch * 6, H * 2))
+        fig, axs = plt.subplots(H, patch, sharex=True,sharey=True, figsize=(patch * 6, H * 2))
 
         color = ['#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000']
 
@@ -169,14 +165,10 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
             ax.set_xticks([])
             ax.set_xlabel('')
             ax.set_ylabel('')
-
-            fig.supxlabel('频率/Hz', y=0.08, fontsize=16)
-
-            fig.supylabel('幅度', x=0.09, fontsize=16)
-
-            fig.subplots_adjust(wspace=0, hspace=0)
-
-
+            plt.tight_layout()
+            fig.subplots_adjust(wspace=0.2, hspace=0.1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+            fig.text(0.5, 0.04, '时间/秒', ha='center', va='center', fontsize=16)
+            fig.text(0.09, 0.5, '幅度', ha='center', va='center', rotation='vertical', fontsize=28)
 
     if path is not None:
         plt.savefig(path, dpi=300)

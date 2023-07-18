@@ -7,8 +7,6 @@ from tqdm import tqdm
 from torch.utils.data import Dataset,DataLoader,Subset
 import torch
 from collections import Counter
-
-
 import matplotlib.pyplot as plt
 from collections import Counter
 
@@ -32,7 +30,6 @@ def plot_label_counts(label_counter):
     # 显示图形
     plt.show()
 
-
 def filter_df_by_labels(df, labels_dict):
     '''
     df: Input pandas dataframe with data path and labels
@@ -46,7 +43,6 @@ def filter_df_by_labels(df, labels_dict):
     for label, value in labels_dict.items():
         df_filtered = df_filtered[df_filtered[label] == value]
     return df_filtered
-
 
 def create_labels_dict(**kwargs):
     """
@@ -63,7 +59,6 @@ def create_labels_dict(**kwargs):
             labels_dict[label_name] = label_value
 
     return labels_dict
-
 
 def get_files(dir,label='state',is_train=True,mutli=None,plot_counter=None,**kwargs):
     '''
@@ -266,6 +261,28 @@ class SQ_Multi(Dataset):
     def get_classes_num(self):
         return len(self.cls_num),self.cls_num # num, name
 
+def split_dataset(datasets_train, target_label=None,isprint=False):
+    if target_label is None:
+        return datasets_train,datasets_train
+
+    positive_indices = [index for index, label in enumerate(datasets_train.labels) if label == target_label]
+    positive_subset = Subset(datasets_train, positive_indices)
+
+    # 根据指定标签筛选出不包含标签的子集
+    negative_indices = [index for index, label in enumerate(datasets_train.labels) if label != target_label]
+    negative_subset = Subset(datasets_train, negative_indices)
+
+    # 输出子集的长度
+    if isprint:
+        neg = DataLoader(negative_subset, batch_size=128)
+        for i, batch in enumerate(neg):
+            print(batch[1])
+
+        pos = DataLoader(positive_subset, batch_size=128)
+        for i, batch in enumerate(pos):
+            print(batch[1])
+
+    return negative_subset, positive_subset
 
 if __name__ == '__main__':
     ori_root = '/home/lucian/Documents/datas/Graduate_data/SQdata/dataframe.csv'
@@ -278,10 +295,6 @@ if __name__ == '__main__':
     normlizetype = 'mean-std'
     datasets = {}
     datasets_train = SQ_Multi(ori_csv_pd,labels_dict, label_index,normlizetype, is_train=True,data_num=20)
-    train_dataloader, val_dataloader = get_loaders(datasets_train, seed=5, batch=128)
-    for id, (data, label,assist) in enumerate(train_dataloader):
-        print(id, data.shape, label,assist.shape)
-    # datasets_test = SQ(df_out,label_index, normlizetype, is_train=False)
-    # cls,_=datasets_train.get_classes_num()
 
-
+    target_label = 29
+    tra,cal=split_dataset(datasets_train,target_label,isprint=True)

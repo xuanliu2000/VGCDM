@@ -4,7 +4,7 @@ import numpy as np
 from diffusion.Unet1D import Unet1D,Unet1D_crossatt
 from diffusion.diffusion import GaussianDiffusion1D
 from dataset import *
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader,Subset
 from torch.optim import Adam,AdamW
 import torch.nn.functional as F
 from evaluate import *
@@ -12,6 +12,7 @@ import datetime
 import os
 import pandas as pd
 from pathlib import Path
+from utils.logger import create_logger
 
 def get_mean_dev(y):
     b=y.shape[0]
@@ -21,22 +22,47 @@ def get_mean_dev(y):
     # print(mean,variance)
     return mean , variance
 
+def default_dir(dir):
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    return dir
+
 # Specify output directory here
 output_dir = "./output"
-if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
-
-# time
-cur_time=datetime.datetime.now().strftime('%Y_%m%d_%H%M%S')
-time_out_dir=os.path.join(output_dir,cur_time)
-if not os.path.exists(time_out_dir):
-    os.makedirs(time_out_dir)
-#use gpu
-device = "cuda" if torch.cuda.is_available() else "cpu"
-
-Batch_Size=128
+default_dir(output_dir)
+Batch_Size = 32
 norm_type = '1-1'
 index='SQ_M'
+
+length=2048
+data_num='all'
+patch = 8 if Batch_Size >= 64 else 4
+
+
+cond_np=None
+# time
+new_dir=default_dir(os.path.join(output_dir,index))
+cur_time=datetime.datetime.now().strftime('%Y_%m%d_%H%M%S')
+time_out_dir=default_dir(os.path.join(new_dir,cur_time))
+logger = create_logger(output_dir=time_out_dir,  name=f"{index}.txt")
+logger.info("index:{},norm_type:{};data_num:{}"
+                .format(index,norm_type,data_num))
+
+
+# diffusion para
+dif_object = 'pred_v'
+beta_schedule= 'linear'
+beta_start = 0.000001
+beta_end = 0.01
+timesteps = 1000
+epochs = 200
+loss_type='huber'
+
+logger.info("dif_object:{},beta_schedule:{},beta:{}-{};epochs:{};diffusion time step:{};loss type:{}"
+                .format(dif_object,beta_schedule,beta_start,beta_end,epochs,timesteps,loss_type))
+
+#use gpu
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 if index=='SQ':
     datasets,SQ_data,cond=build_dataset(
@@ -44,7 +70,10 @@ if index=='SQ':
         b=Batch_Size,
         normlizetype=norm_type,
         rpm=19,
-        state='outer3')
+        state='outer3',
+        data_num=data_num,
+        length=length,
+        )
     indices = np.random.choice(
         len(SQ_data),
         size=Batch_Size,
@@ -58,8 +87,9 @@ elif index=='SQ_M':
         b=Batch_Size,
         normlizetype=norm_type,
         # rpm=19,
-        state='inner3',
-        data_num=25
+        state='outer3', # normal,inner,outer
+        data_num=data_num,
+        length=length,
         )
     indices = np.random.choice(
         len(SQ_data),
@@ -69,38 +99,87 @@ elif index=='SQ_M':
     cond_np= np.array(SQ_C)[indices]
     sr = 25600
 
+elif index=='SQV':
+    datasets,SQ_data,cond=build_dataset(
+        dataset_type='SQV',
+        b=Batch_Size,
+        normlizetype=norm_type,
+        state='NC',
+        data_num=data_num,
+        length=length,
+    )
+    indices = np.random.choice(
+        len(SQ_data),
+        size=Batch_Size,
+        replace=False)
+    data_np = np.array(SQ_data)[indices]
+    sr = 25600
+
+elif index=='SQV_M':
+    datasets,SQV_data,cond,SQV_C=build_dataset(
+        dataset_type='SQV_M',
+        b=Batch_Size,
+        normlizetype=norm_type,
+        state='IF_2',
+        data_num=data_num,
+        length=length,
+        )
+    indices = np.random.choice(
+        len(SQV_data),
+        size=Batch_Size,
+        replace=False)
+    data_np = np.array(SQV_data)[indices]
+    cond_np= np.array(SQV_C)[indices]
+    sr = 25600
+
 elif index=='CW':
     datasets, data_np, cond = build_dataset(
         dataset_type='CW',
         normlizetype=norm_type,
-        ch=5)
+        ch=5,
+        data_num=data_num,
+        length=length,
+    )
+
     sr = 12000
 
 else:
-    datasets, data_np, cond = build_dataset(
-        dataset_type='CW',
-        normlizetype=norm_type,
-        ch=5)
-    sr = 12000
+    raise ('unexpected data index, please choose data index form SQ,SQV,SQ_M,SQV_M,CW')
 
-ori_path=os.path.join(output_dir,cur_time,cond+'_ori.png')
+# plot origin data
+logger.info("condition:{}".format(cond))
+ori_path=os.path.join(time_out_dir,cur_time+cond+'_ori.png')
 if '_M' in index:
-    plot_np(data_np,z=cond_np,path= None,show_mode=False)
+    plot_np(y=data_np,z=cond_np,patch=patch,path= ori_path,show_mode=False)
 else:
-    plot_np(data_np,path= None,show_mode=False)
+    plot_np(y=data_np,patch=patch,path= ori_path,show_mode=False)
 
-train_dataloader = DataLoader(datasets["train"], batch_size=Batch_Size, shuffle=True)
-# val_dataloader = DataLoader(datasets["val"], batch_size=Batch_Size, shuffle=False)
+if index in ['SQ' , 'SQ_M']:
+    target_label=19
+    train_dataset,val_dataset=split_dataset(datasets['train'],target_label)
+    train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True)
+    val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=False)
+else:
+    train_dataset,val_dataset=get_loaders(
+        datasets['train'],
+        val_ratio=0.3,
+        batch_size=Batch_Size,
+        with_test=False,
+        with_label=False,
+    )
+    train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8)
+    val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=False,num_workers=8)
+logger.info("train_num:{};val_num:{}".format(len(train_dataset),len(val_dataset)))
 
-def linear_beta_schedule(timesteps):
-    beta_start = 0.000001
-    beta_end = 0.01
-    return torch.linspace(beta_start, beta_end, timesteps)
-
-timesteps = 1000
 
 # define beta schedule
-betas = linear_beta_schedule(timesteps=timesteps)
+def linear_beta_schedule(timesteps,beta_start = 0.000001,beta_end = 0.01):
+    return torch.linspace(beta_start, beta_end, timesteps)
+
+betas = linear_beta_schedule(
+    timesteps=timesteps,
+    beta_start=beta_start,
+    beta_end=beta_end)
 
 # define alphas
 alphas = 1. - betas
@@ -132,7 +211,6 @@ def q_sample(x_start, t, noise=None):
 
     return sqrt_alphas_cumprod_t * x_start + sqrt_one_minus_alphas_cumprod_t * noise
 
-
 def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1",context=None):
     if noise is None:
         noise = torch.randn_like(x_start)
@@ -151,19 +229,11 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1",context=None)
 
     return loss
 
-
-# model = Unet1D(
-#     dim = 32,
-#     num_layers=4,
-#     dim_mults = (1, 2, 4, 8),
-#     channels = 1
-# )
-
 model = Unet1D_crossatt(
     dim=32,
     num_layers=4,
     dim_mults=(1, 2, 4, 8),
-    context_dim=1024,
+    context_dim=length,
     channels=1,
     use_crossatt=True
 )
@@ -176,16 +246,15 @@ optimizer = AdamW(params=model.parameters(),lr=1e-4,betas=(0.9, 0.999), eps=1e-0
 
 diffusion = GaussianDiffusion1D(
     model,
-    seq_length = 1024,
-    timesteps = 1000,
-    objective = 'pred_v',
-    beta_schedule='linear',
+    seq_length = length,
+    timesteps = timesteps, #1000
+    objective = dif_object, #'pred_v'
+    beta_schedule=beta_schedule,#'linear'
     auto_normalize=False
 )
 
 diffusion.to(device)
 
-epochs = 200
 
 for epoch in range(epochs):
     for step, (inputs, labels,context) in enumerate(train_dataloader):
@@ -198,12 +267,12 @@ for epoch in range(epochs):
 
       # Algorithm 1 line 3: sample t uniformally for every example in the batch
       t = torch.randint(0, timesteps, (batch_size,), device=device).long()
-      loss = p_losses(model, batch, t, loss_type="huber",context=context)
+      loss = p_losses(model, batch, t, loss_type=loss_type,context=context)
 
       if step % 100 == 0:
         learning_rate = optimizer.param_groups[0]['lr']
         memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
-        print("Epoch:{},Loss:{};Mem:{}MB,Lr:{}".format(epoch,loss.item(),memory_used,learning_rate))
+        logger.info("Epoch:{},Loss:{};Mem:{}MB,Lr:{}".format(epoch,loss.item(),memory_used,learning_rate))
 
       loss.backward()
       optimizer.step()
@@ -223,16 +292,16 @@ if save_index is True:
     torch.save(model.state_dict(), paths[0])
 
 if '_M' in index:
-    dataloader = DataLoader(datasets['train'], batch_size=Batch_Size, shuffle=True)
-    data_iter = iter(dataloader)
+    data_iter = iter(val_dataloader)
 
     while True:
         batch = next(data_iter)
-        conds = batch[2].to(device).float()
-        if conds.shape[0] == Batch_Size:
+        val_input = batch[0].to(device).float()
+        val_conds = batch[2].to(device).float()
+        if val_conds.shape[0] == Batch_Size:
             break
         # process third_data
-    sampled_seq = diffusion.sample(batch_size = Batch_Size,cond=conds)
+    sampled_seq = diffusion.sample(batch_size = Batch_Size,cond=val_conds)
 else:
     sampled_seq = diffusion.sample(batch_size = Batch_Size)
 # for i in range(16):
@@ -242,23 +311,35 @@ out_np=sampled_seq.cuda().data.cpu().numpy()
 
 # add condition in plot when use cross attention
 if '_M' in index:
-    plot_two_np(out_np,
-                data_np,
-                z1=conds.cuda().data.cpu().numpy(),
-                z2=cond_np,
+    val_data_path=os.path.join(time_out_dir,cur_time+cond+'.npy')
+    val_output=val_input.cuda().data.cpu().numpy()
+    val_conds_out=val_conds.cuda().data.cpu().numpy()
+    out_npy=np.concatenate((out_np,val_output,val_conds_out),axis=1)
+    np.save(val_data_path,arr=out_npy)
+    plot_two_np(x=out_np,
+                y=val_output,
+                z1=None,
+                z2=val_conds_out,
+                patch=patch,
                 path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),
                 show_mode='time',
                 sample_rate=sr)
-    plot_two_np(out_np,data_np,
+    plot_two_np(x=out_np,
+                y=val_input.cuda().data.cpu().numpy(),
+                patch=patch,
                 path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),
                 show_mode='fft',
                 sample_rate=sr)
 else:
-    plot_two_np(out_np,data_np,
+    plot_two_np(x=out_np,
+                y=data_np,
                 path=os.path.join(time_out_dir,cur_time+cond+'_time.png'),
+                patch=patch,
                 show_mode='time',
                 sample_rate=sr)
-    plot_two_np(out_np,data_np,
+    plot_two_np(x=out_np,
+                y=data_np,
+                patch=patch,
                 path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),
                 show_mode='fft',
                 sample_rate=sr)
