@@ -237,7 +237,7 @@ class GaussianDiffusion1D(nn.Module):
         return pred_img, x_start
 
     @torch.no_grad()
-    def p_sample_loop(self, shape,cond=None):
+    def p_sample_loop(self, shape, cond=None):
         batch, device = shape[0], self.betas.device
 
         img = torch.randn(shape, device=device)

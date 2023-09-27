@@ -1,16 +1,12 @@
-from .CWRU import CWRU
-from .SQ import SQ,SQ_Multi
-from .SQV import SQV_Multi,SQV
 import numpy as np
 import pandas as pd
-import os
-from torch.utils.data import Dataset,DataLoader,Subset,random_split
-import torch
-import pandas as pd
-
 from sklearn.model_selection import StratifiedShuffleSplit
-from collections import Counter
-from torch.utils.data.sampler import Sampler,RandomSampler,SequentialSampler
+from torch.utils.data import DataLoader, Subset, random_split
+
+from .CWRU import CWRU
+from .SQ import SQ, SQ_Multi
+from .SQV import SQV_Multi, SQV
+
 
 def check_dict(key,dict):
     return  True if key in dict else False
@@ -38,11 +34,11 @@ def split_dataset(datasets_train, target_label=None,isprint=False):
     positive_indices = [index for index, label in enumerate(datasets_train.labels) if label == target_label]
     positive_subset = Subset(datasets_train, positive_indices)
 
-    # 根据指定标签筛选出不包含标签的子集
+    # get subset according to the index
     negative_indices = [index for index, label in enumerate(datasets_train.labels) if label != target_label]
     negative_subset = Subset(datasets_train, negative_indices)
 
-    # 输出子集的长度
+    # print number
     if isprint:
         neg = DataLoader(negative_subset, batch_size=128)
         for i, batch in enumerate(neg):
@@ -71,7 +67,7 @@ def get_loaders(train_dataset,
         train_dataset, val_dataset = random_split(train_dataset, [train_size, valid_size])
         return train_dataset,val_dataset
 
-    # 使用 StratifiedShuffleSplit 进行标签分层随机划分
+    # StratifiedShuffleSplit
     sss1 = StratifiedShuffleSplit(n_splits=1,
                                   test_size=val_ratio,
                                   random_state=seed)  # for splitting into training and the rest

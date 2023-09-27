@@ -42,7 +42,7 @@ def Upsample(dim, dim_out = None):
 def Downsample(dim, dim_out = None):
     return nn.Conv1d(dim, default(dim_out, dim), 4, 2, 1)
 
-class WeightStandardizedConv2d(nn.Conv1d):
+class WeightStandardizedConv1d(nn.Conv1d):
     """
     https://arxiv.org/abs/1903.10520
     weight standardization purportedly works synergistically with group normalization
@@ -114,7 +114,7 @@ class RandomOrLearnedSinusoidalPosEmb(nn.Module):
 class Block(nn.Module):
     def __init__(self, dim, dim_out, groups = 8):
         super().__init__()
-        self.proj = WeightStandardizedConv2d(dim, dim_out, 3, padding = 1)
+        self.proj = WeightStandardizedConv1d(dim, dim_out, 3, padding = 1)
         self.norm = nn.GroupNorm(groups, dim_out)
         self.act = nn.SiLU()
 
@@ -397,7 +397,6 @@ class Unet1D_crossatt(nn.Module):
         self.channels = channels
         self.self_condition = self_condition
 
-
         if use_crossatt:
             assert context_dim is not None, 'Fool!! You forgot to include the dimension of your cross-attention conditioning...'
 
@@ -409,7 +408,7 @@ class Unet1D_crossatt(nn.Module):
         input_channels = channels * (2 if self_condition else 1)
 
         init_dim = default(init_dim, dim)
-        self.init_conv = nn.Conv1d(input_channels, init_dim, 7, padding=3,bias=True)# dilation=1, bias=True)
+        self.init_conv = nn.Conv1d(input_channels, init_dim, 3, padding=1,bias=False)# dilation=1, bias=True)
 
         dims = [init_dim, *map(lambda m: dim * m, dim_mults)]
         in_out = list(zip(dims[:-1], dims[1:]))
@@ -440,7 +439,6 @@ class Unet1D_crossatt(nn.Module):
         # layers
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
-        num_resolutions = len(in_out)
 
         # in __init__ method
         for ind, (dim_in, dim_out) in enumerate(in_out[:num_layers]):
@@ -509,7 +507,6 @@ class Unet1D_crossatt(nn.Module):
     def forward(self, x, time, x_self_cond=None,context=None):
 
         b,c,l=x.shape
-
         if self.self_condition:
             x_self_cond = default(x_self_cond, lambda: torch.zeros_like(x))
             x = torch.cat((x_self_cond, x), dim=1)

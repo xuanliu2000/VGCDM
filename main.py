@@ -1,26 +1,26 @@
 import torch
 import numpy as np
 # from diffusion.diffusion_1d import Unet1D, GaussianDiffusion1D
-from diffusion.Unet1D import Unet1D,Unet1D_crossatt
-from diffusion.diffusion import GaussianDiffusion1D
+from model.diffusion.Unet1D import Unet1D_crossatt,Unet1D
+from model.diffusion.diffusion import GaussianDiffusion1D
 from dataset import *
-from torch.utils.data import DataLoader,Subset
-from torch.optim import Adam,AdamW
+from torch.utils.data import DataLoader
+from torch.optim import AdamW
 import torch.nn.functional as F
 from evaluate import *
 import datetime
 import os
-import pandas as pd
 from pathlib import Path
 from utils.logger import create_logger
+from torch.optim import lr_scheduler
 
 def get_mean_dev(y):
     b=y.shape[0]
-    y=y.reshape(b,-1)
+    y=y.reshape(1,b)
     mean=np.mean(y,axis=1)
     variance = np.var(y,axis=1)
     # print(mean,variance)
-    return mean , variance
+    return mean, variance
 
 def default_dir(dir):
     if not os.path.exists(dir):
@@ -52,8 +52,8 @@ logger.info("index:{},norm_type:{};data_num:{}"
 # diffusion para
 dif_object = 'pred_v'
 beta_schedule= 'linear'
-beta_start = 0.000001
-beta_end = 0.01
+beta_start = 0.0001
+beta_end = 0.02
 timesteps = 1000
 epochs = 200
 loss_type='huber'
@@ -70,7 +70,7 @@ if index=='SQ':
         b=Batch_Size,
         normlizetype=norm_type,
         rpm=19,
-        state='outer3',
+        state='normal',
         data_num=data_num,
         length=length,
         )
@@ -86,7 +86,7 @@ elif index=='SQ_M':
         dataset_type='SQ_M',
         b=Batch_Size,
         normlizetype=norm_type,
-        # rpm=19,
+        rpm=19,
         state='outer3', # normal,inner,outer
         data_num=data_num,
         length=length,
@@ -120,7 +120,7 @@ elif index=='SQV_M':
         dataset_type='SQV_M',
         b=Batch_Size,
         normlizetype=norm_type,
-        state='IF_2',
+        state='OF_3',
         data_num=data_num,
         length=length,
         )
@@ -140,9 +140,7 @@ elif index=='CW':
         data_num=data_num,
         length=length,
     )
-
     sr = 12000
-
 else:
     raise ('unexpected data index, please choose data index form SQ,SQV,SQ_M,SQV_M,CW')
 
@@ -154,26 +152,26 @@ if '_M' in index:
 else:
     plot_np(y=data_np,patch=patch,path= ori_path,show_mode=False)
 
-if index in ['SQ' , 'SQ_M']:
-    target_label=19
-    train_dataset,val_dataset=split_dataset(datasets['train'],target_label)
-    train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True)
-    val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=False)
-else:
-    train_dataset,val_dataset=get_loaders(
-        datasets['train'],
-        val_ratio=0.3,
-        batch_size=Batch_Size,
-        with_test=False,
-        with_label=False,
-    )
-    train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8)
-    val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=False,num_workers=8)
+# if index in ['SQ' , 'SQ_M']:
+#     target_label=19
+#     train_dataset,val_dataset=split_dataset(datasets['train'],target_label)
+#     train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True)
+#     val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=True,drop_last=True)
+# else:
+train_dataset,val_dataset=get_loaders(
+    datasets['train'],
+    val_ratio=0.3,
+    batch_size=Batch_Size,
+    with_test=False,
+    with_label=False,
+)
+train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8)
+val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8,drop_last=True)
 logger.info("train_num:{};val_num:{}".format(len(train_dataset),len(val_dataset)))
 
 
 # define beta schedule
-def linear_beta_schedule(timesteps,beta_start = 0.000001,beta_end = 0.01):
+def linear_beta_schedule(timesteps,beta_start = 0.0001,beta_end = 0.02):
     return torch.linspace(beta_start, beta_end, timesteps)
 
 betas = linear_beta_schedule(
@@ -181,7 +179,7 @@ betas = linear_beta_schedule(
     beta_start=beta_start,
     beta_end=beta_end)
 
-# define alphas
+#define alphas
 alphas = 1. - betas
 alphas_cumprod = torch.cumprod(alphas, axis=0)
 alphas_cumprod_prev = F.pad(alphas_cumprod[:-1], (1, 0), value=1.0)
@@ -216,7 +214,7 @@ def p_losses(denoise_model, x_start, t, noise=None, loss_type="l1",context=None)
         noise = torch.randn_like(x_start)
 
     x_noisy = q_sample(x_start=x_start, t=t, noise=noise)
-    predicted_noise = denoise_model(x_noisy, t,context=context)
+    predicted_noise = denoise_model(x_noisy, t, context=context)
 
     if loss_type == 'l1':
         loss = F.l1_loss(noise, predicted_noise)
@@ -233,15 +231,23 @@ model = Unet1D_crossatt(
     dim=32,
     num_layers=4,
     dim_mults=(1, 2, 4, 8),
-    context_dim=length,
+    #context_dim=length,
     channels=1,
-    use_crossatt=True
+    use_crossatt=False
 )
+# model=Unet1D(
+#     dim=32,
+#     num_layers=4,
+#     dim_mults=(1, 2, 4, 8),
+#     channels=1,
+# )
+
 
 model.to(device)
 
 
 optimizer = AdamW(params=model.parameters(),lr=1e-4,betas=(0.9, 0.999), eps=1e-08,weight_decay=0.1)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
 # optimizer = Adam(model.parameters(), lr=1e-4)
 
 diffusion = GaussianDiffusion1D(
@@ -258,9 +264,7 @@ diffusion.to(device)
 
 for epoch in range(epochs):
     for step, (inputs, labels,context) in enumerate(train_dataloader):
-      # print('batch',type(inputs))
       optimizer.zero_grad()
-
       batch_size = inputs.shape[0]
       batch = inputs.to(device).float()
       context = context.to(device).float()
@@ -276,9 +280,10 @@ for epoch in range(epochs):
 
       loss.backward()
       optimizer.step()
+    scheduler.step()
 
 # save_model check
-save_index=False
+save_index=True
 if save_index is True:
     model_path=time_out_dir
     paths = [
@@ -291,23 +296,55 @@ if save_index is True:
 
     torch.save(model.state_dict(), paths[0])
 
-if '_M' in index:
-    data_iter = iter(val_dataloader)
+rsme_seqs= []
+all_val_inputs = []
+all_val_conds = []
+all_sampled_seqs = []
+all_psnr=[]
+all_cos=[]
 
-    while True:
-        batch = next(data_iter)
-        val_input = batch[0].to(device).float()
-        val_conds = batch[2].to(device).float()
-        if val_conds.shape[0] == Batch_Size:
-            break
-        # process third_data
-    sampled_seq = diffusion.sample(batch_size = Batch_Size,cond=val_conds)
-else:
-    sampled_seq = diffusion.sample(batch_size = Batch_Size)
+for batch in val_dataloader:
+
+    val_input = batch[0].to(device).float()
+    val_conds = batch[2].to(device).float()
+    B=val_input.shape[0]
+
+    if '_M' in index:
+        sampled_seq = diffusion.sample(batch_size=B)#, cond=val_conds)
+        evl_out = eval_all(sampled_seq.detach().cpu().numpy(), val_input.detach().cpu().numpy())
+        all_val_inputs.append(val_input)
+        all_val_conds.append(val_conds)
+        all_sampled_seqs.append(sampled_seq)
+        rsme_seqs.append(evl_out[0])
+        all_psnr.append(evl_out[1])
+        all_cos.append(evl_out[2])
+
+all_val_inputs = torch.cat(all_val_inputs, dim=0)
+all_val_conds = torch.cat(all_val_conds, dim=0)
+all_sampled_seqs = torch.cat(all_sampled_seqs, dim=0)
+
+all_rsme = np.concatenate(rsme_seqs, axis=None).reshape(-1)
+rsme_mean, rsme_var = get_mean_dev(all_rsme)
+print('RSME', rsme_mean, rsme_var, all_rsme)
+
+all_psnrs = np.concatenate(all_psnr, axis=None).reshape(-1)
+psnr_mean, psnr_var = get_mean_dev(all_psnrs)
+print('PSNR', psnr_mean, psnr_var, all_psnrs)
+
+all_frecos = np.concatenate(all_cos, axis=None).reshape(-1)
+cos_mean, cos_var = get_mean_dev(all_frecos)
+print('fre_cos', cos_mean, cos_var, all_frecos)
+print('All_eval', rsme_mean, rsme_var, psnr_mean, psnr_var, cos_mean, cos_var)
+
 # for i in range(16):
-
 out_path=cond+'_out.png'
-out_np=sampled_seq.cuda().data.cpu().numpy()
+out_np=all_sampled_seqs[:Batch_Size].cuda().data.cpu().numpy()
+
+val_data_path=os.path.join(time_out_dir,cur_time+cond+'.npy')
+val_in=all_val_inputs[:Batch_Size].cuda().data.cpu().numpy()
+val_conds_out=all_val_conds[:Batch_Size].cuda().data.cpu().numpy()
+out_npy=np.concatenate((out_np,val_in,val_conds_out),axis=1)
+np.save(val_data_path,arr=out_npy)
 
 # add condition in plot when use cross attention
 if '_M' in index:
@@ -343,6 +380,6 @@ else:
                 path=os.path.join(time_out_dir,cur_time+cond+'_fft.png'),
                 show_mode='fft',
                 sample_rate=sr)
-
-df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
+#
+# df_m,df_v=get_mean_dev(sampled_seq.cuda().data.cpu().numpy())
 # print(sampled_seq.shape) # (4, 32, 128)t

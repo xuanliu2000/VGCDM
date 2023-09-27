@@ -1,6 +1,9 @@
+# pretrain and result
 /output/
 /pretrained/
 /results/
 
-
-/test_acc.py
+# camparison and inference
+/main_cmp.py
+/inference.py
+!/plot_results.ipynb

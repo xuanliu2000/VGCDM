@@ -1,11 +1,11 @@
 import os
+
 import pandas as pd
 from scipy.io import loadmat
-from utils.sequence_transform import *
-from torch.utils.data import Dataset,DataLoader,Subset
-from tqdm import tqdm
-import torch
 from sklearn.model_selection import StratifiedShuffleSplit
+from torch.utils.data import Dataset, DataLoader, Subset
+from tqdm import tqdm
+from utils.sequence_transform import *
 
 signal_size = 1024
 from collections import Counter
@@ -47,7 +47,7 @@ axis = ["_DE_time", "_FE_time", "_BA_time"]
 
 
 # generate Training Dataset and Testing Dataset
-def get_files(root, test=False,ch=None):
+def get_files(root, test=False,ch=None,**kwargs):
     '''
     This function is used to generate the final training set and test set.
     root:The location of the data set
@@ -59,7 +59,7 @@ def get_files(root, test=False,ch=None):
         data_root2 = os.path.join('/tmp', root, datasetname[0])
 
         path1 = os.path.join('/tmp', data_root1, normalname[0])  # 0->1797rpm ;1->1772rpm;2->1750rpm;3->1730rpm
-        data, lab = data_load(path1, axisname=normalname[0],label=0)  # nThe label for normal data is 0
+        data, lab = data_load(path1, axisname=normalname[0],label=0,**kwargs)  # nThe label for normal data is 0
 
         for i in tqdm(range(len(dataname1))):
             path2 = os.path.join('/tmp', data_root2, dataname1[i])
@@ -86,7 +86,7 @@ def get_files(root, test=False,ch=None):
             raise('ch is not exist')
 
 
-def data_load(filename, axisname, label):
+def data_load(filename, axisname, label,length=1024,data_num=20):
     '''
     This function is mainly used to generate test data and training data.
     filename:Data location
@@ -98,22 +98,16 @@ def data_load(filename, axisname, label):
     else:
         realaxis = "X" + datanumber[0] + axis[0]
     fl = loadmat(filename)[realaxis]
-    data = []
-    lab = []
+    if data_num == 'all':
+        print('all_data_num for one csv is', int(fl.shape[0] // length))
+        data = [fl[start:end].reshape(1, length) for start, end in zip(range(0, fl.shape[0], length),
+                                                                       range(length, fl.shape[0] + 1, length))]
+    elif data_num < fl.shape[0] // length:
+        data = np.split(fl[:length * data_num, :].reshape(-1, length), data_num, axis=0)
+    else:
+        raise ('data length choose wrong')
 
-
-    data = [fl[start:end].reshape(1, signal_size) for start, end in zip(range(0, fl.shape[0], signal_size),
-                                                                        range(signal_size, fl.shape[0] + 1, signal_size))]
     lab = [label] * len(data)
-
-    # return data, lab
-    #
-    # start, end = 0, signal_size
-    # while end <= fl.shape[0]:
-    #     data.append(fl[start:end].reshape(1,signal_size))
-    #     lab.append(label)
-    #     start += signal_size
-    #     end += signal_size
 
     return data, lab
 
@@ -140,13 +134,13 @@ def data_transforms(dataset_type="train", normlize_type="-1-1"):
 
 class CWRU(Dataset):
 
-    def __init__(self, data_dir, normlizetype, is_train=True,ch=None):
+    def __init__(self, data_dir, normlizetype, is_train=True,ch=None,**kwargs):
         self.data_dir = data_dir
         self.normlizetype = normlizetype
         self.is_train = is_train
         self.ch=self._get_ch(ch)
 
-        list_data = get_files(self.data_dir, self.is_train,ch=ch)
+        list_data = get_files(self.data_dir, self.is_train,ch=ch,**kwargs)
         self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
 
         if self.is_train:
@@ -216,9 +210,9 @@ if __name__ == '__main__':
     data_dir="/home/lucian/Documents/datas/CW"
     normlizetype='mean-std'
     datasets={}
-    datasets_train = CWRU(data_dir, normlizetype,is_train=True,ch=1)
+    datasets_train = CWRU(data_dir, normlizetype,is_train=True,ch=1,length=1024,data_num=20)
     ch=datasets_train.ch
     train_dataloader,val_dataloader=get_loaders(datasets_train,seed=5, batch=16)
     for id, (data,label) in enumerate(train_dataloader):
         print(id,len(data),label)
-    datasets['test'] = CWRU(data_dir, normlizetype, is_train=False)
+    datasets['test'] = CWRU(data_dir, normlizetype, is_train=False,ch=1)

@@ -1,33 +1,26 @@
-import os
-import pandas as pd
-from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
-from utils.sequence_transform import *
-from tqdm import tqdm
-from torch.utils.data import Dataset,DataLoader,Subset
-import torch
-from collections import Counter
-import matplotlib.pyplot as plt
 from collections import Counter
 
+import matplotlib.pyplot as plt
+import pandas as pd
+import torch
+from torch.utils.data import Dataset, DataLoader, Subset
+
+from utils.sequence_transform import *
+
+
 def plot_label_counts(label_counter):
-    # 提取标签和计数
     labels = label_counter.keys()
     counts = label_counter.values()
 
-    # 创建柱状图
     fig, ax = plt.subplots()
     ax.bar(labels, counts)
 
-    # 设置标题和标签
     ax.set_title('Label Counts')
     ax.set_xlabel('Labels')
     ax.set_ylabel('Counts')
 
-    # 自动调整标签旋转
     plt.xticks(rotation=45)
 
-    # 显示图形
     plt.show()
 
 def filter_df_by_labels(df, labels_dict):

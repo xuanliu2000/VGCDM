@@ -46,7 +46,6 @@ class CheckpointFunction(torch.autograd.Function):
         del output_tensors
         return (None, None) + input_grads
 
-
 def checkpoint(func, inputs, params, flag):
     """
     Evaluate a function without caching intermediate activations, allowing for
@@ -67,7 +66,7 @@ class CrossAttention(nn.Module):
     def __init__(self, query_dim, context_dim=None, heads=8, dim_head=64, dropout=0.):
         super().__init__()
         inner_dim = dim_head * heads
-        context_dim = default(context_dim, query_dim)
+        context_dim = default(context_dim, query_dim) # if context_dim else query dim
 
         self.scale = dim_head ** -0.5
         self.heads = heads
@@ -85,7 +84,7 @@ class CrossAttention(nn.Module):
         h = self.heads
 
         q = self.to_q(x)
-        context = default(context, x)
+        context = default(context, x) # if context else x
         k = self.to_k(context)
         v = self.to_v(context)
 
@@ -99,7 +98,6 @@ class CrossAttention(nn.Module):
             mask = repeat(mask, 'b j -> (b h) () j', h=h)
             sim.masked_fill_(~mask, max_neg_value)
 
-        # attention, what we cannot get enough of
         attn = sim.softmax(dim=-1)
 
         out = einsum('b i j, b j d -> b i d', attn, v)
@@ -221,9 +219,7 @@ class LinearAttention(nn.Module):
     def forward(self, x):
         b, c, n = x.shape
         qkv = self.to_qkv(x)
-        # print(qkv.shape)
         q, k, v = rearrange(qkv, 'b (qkv heads c) n -> qkv b heads c n', heads=self.heads, qkv=3)
-        # print(q.shape,k.shape,v.shape)
         k = k.softmax(dim=-1)
         context = torch.einsum('bhcn,bhen->bhce', k, v)
         out = torch.einsum('bhce,bhcn->bhen', context, q)
@@ -269,31 +265,31 @@ class SpatialSelfAttention(nn.Module):
 
         # compute attention
         b, c, n = q.shape
-        w_ = torch.einsum('bij,bjk->bik', q, k)
+        qk = torch.einsum('bic,bjc->bij', q, k)
+        qk = qk * (int(self.in_channels) ** (-0.5))
+        qk = torch.nn.functional.softmax(qk, dim=-1)
+        out = torch.einsum('bij,bjk->bik', qk, v)
 
-        w_ = w_ * (int(c) ** (-0.5))
-        w_ = torch.nn.functional.softmax(w_, dim=2)
-
-        # attend to values
-        w_ = rearrange(w_, 'b i j -> b j i')
-        h_ = torch.einsum('bij,bjk->bik', v, w_)
-        h_ = self.proj_out(h_)
+        h_ = self.proj_out(out)
 
         return x + h_
 
 if __name__=="__main__":
     model = CrossAttention(query_dim=1024, context_dim=256)
-    x = torch.randn(128, 1, 1024)
+    x = torch.randn(128, 6, 1024)
     context = torch.randn(128, 1, 256)
     output = model(x, context=context)
     print(output.shape)
 
-    net=SpatialTransformer(
-        in_channels=1,
-        n_heads=4,
-        d_head=16,
-        context_dim=256,
-    )
-    y=net(x,context)
+    # net=SpatialTransformer(
+    #     in_channels=1,
+    #     n_heads=4,
+    #     d_head=16,
+    #     context_dim=256,
+    # )
+
+    net=SpatialSelfAttention(in_channels=6)
+
+    y=net(x)
     print(y.shape)
 

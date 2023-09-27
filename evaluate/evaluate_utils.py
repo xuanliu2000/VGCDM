@@ -13,17 +13,15 @@ def rmse(predictions, targets):
 
 def psnr(img1, img2, max_val=1.0):
     if isinstance(img1, np.ndarray) and isinstance(img2, np.ndarray):
-        # 将 NumPy 数组转换为 PyTorch 张量
+
         img1 = torch.from_numpy(img1).float()
         img2 = torch.from_numpy(img2).float()
 
-    # 计算 MSE
+
     mse = F.mse_loss(img1, img2, reduction='none').mean([1, 2])
 
-    # 计算 PSNR
     psnr_val = 10 * torch.log10(max_val ** 2 / mse)
 
-    # 如果原始输入是 NumPy 数组，则将结果转回 NumPy
     if isinstance(img1, np.ndarray) and isinstance(img2, np.ndarray):
         return psnr_val.numpy()
 
@@ -61,3 +59,10 @@ def fre_cosine(signal1, signal2):
             similarities[i] = cos_sim_func(torch.abs(spectrum1[i, :]), torch.abs(spectrum2[i, :]))
 
     return similarities
+
+
+def eval_all(signal1, signal2):
+    rmse_all=rmse(signal1, signal2)
+    psnr_all=psnr(signal1, signal2)
+    fre_cos_all=fre_cosine(signal1, signal2)
+    return [rmse_all,psnr_all,fre_cos_all]

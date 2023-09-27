@@ -1,34 +1,25 @@
-import os
-import pandas as pd
-from scipy.io import loadmat
-from sklearn.model_selection import train_test_split
-from utils.sequence_transform import *
-from tqdm import tqdm
-from torch.utils.data import Dataset,DataLoader,Subset,random_split
-import torch
 from collections import Counter
+
 import matplotlib.pyplot as plt
-from collections import Counter
+import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
+from torch.utils.data import Dataset, Subset, random_split
+
+from utils.sequence_transform import *
+
 
 def plot_label_counts(label_counter):
-    # 提取标签和计数
     labels = label_counter.keys()
     counts = label_counter.values()
 
-    # 创建柱状图
     fig, ax = plt.subplots()
     ax.bar(labels, counts)
 
-    # 设置标题和标签
     ax.set_title('Label Counts')
     ax.set_xlabel('Labels')
     ax.set_ylabel('Counts')
 
-    # 自动调整标签旋转
     plt.xticks(rotation=45)
-
-    # 显示图形
     plt.show()
 
 def filter_df_by_labels(df, labels_dict):
@@ -87,10 +78,8 @@ def get_files(dir,label='state',is_train=True,mutli=None,plot_counter=None,**kwa
 
         return [data_dict ,label_dict]
     else:
-        csv_list = dir['path'].tolist()
-        assist_list=[i.replace('ch2','ch3') for i in csv_list]
-        # print(csv_list)
-        # print(assist_list)
+        csv_list = dir['path'].tolist() # get vibration signals
+        assist_list=[i.replace('ch2','ch3') for i in csv_list] ## get current signals
         csv_label = dir[label].tolist()
         data_dict, label_dict = data_load(csv_list, labels=csv_label, length=length,data_num=data_num)
         assist_dict, _ = data_load(assist_list, labels=csv_label, length=length,data_num=data_num)
