@@ -453,7 +453,7 @@ class Unet1D_crossatt(nn.Module):
                     dim_in,
                     context_dim=self.context_dim,
                     n_heads=4,
-                    d_head=16,
+                    d_head=16
                 ))
             else:
                 layers.append(Residual(PreNorm(dim_in, LinearAttention(dim_in))))
@@ -504,7 +504,7 @@ class Unet1D_crossatt(nn.Module):
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim=time_dim)
         self.final_conv = nn.Conv1d(dim, self.out_dim, kernel_size=7, padding=(7 - 1) // 2, dilation=1, bias=True)
 
-    def forward(self, x, time, x_self_cond=None,context=None):
+    def forward(self, x, time, x_self_cond=None,context=None,return_features=False):
 
         b,c,l=x.shape
         if self.self_condition:

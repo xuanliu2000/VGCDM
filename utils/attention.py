@@ -193,7 +193,7 @@ class SpatialTransformer(nn.Module):
                                               stride=1,
                                               padding=0))
 
-    def forward(self, x, context=None):
+    def forward(self, x, context=None,return_features=False):
         # note: if no context is given, cross-attention defaults to self-attention
         b, c, t = x.shape
         x_in = x
@@ -205,6 +205,8 @@ class SpatialTransformer(nn.Module):
 
         x = rearrange(x, 'b c l -> b l c')
         x = self.proj_out(x)
+        torch.save(x, './results/attention{}.pt')
+        print('attention score',x)
         return x + x_in
 
 

@@ -2,9 +2,13 @@
 /output/
 /pretrained/
 /results/
+/__pycache__/
 
 # camparison and inference
 /main_cmp.py
 /inference.py
 !/plot_results.ipynb
 !/.ipynb_checkpoints/
+/.ipynb_checkpoints/
+!/.ipynb_checkpoints/
+

@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader, Subset
-
+from sklearn.preprocessing import LabelEncoder
 from utils.sequence_transform import *
 
 
@@ -176,6 +176,7 @@ class SQ(Dataset):
         self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1]})
         self.cls_num=set(list_data[1])
 
+
         if self.is_train:
             self.seq_data = self.data_pd['data'].tolist()
             self.labels = self.data_pd['label'].tolist()
@@ -214,7 +215,9 @@ class SQ_Multi(Dataset):
                  label_index,
                  normlizetype,
                  is_train=True,
-                 dict=None,**kwargs):
+                 dict=None,
+                 use_label=None,
+                 **kwargs):
 
         self.dir = dir
         self.normlizetype = normlizetype
@@ -225,15 +228,16 @@ class SQ_Multi(Dataset):
         list_data= get_files(self.data_dir, label=self.label_index, is_train=self.is_train,mutli=True,**kwargs)
         self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1],'assist':list_data[2]})
         self.cls_num=set(list_data[1])
-
+        if use_label:
+            self.labels = LabelEncoder().fit_transform(list(self.data_pd['label']))
+        else:
+            self.labels = self.data_pd['label'].tolist()
         if self.is_train:
             self.seq_data = self.data_pd['data'].tolist()
-            self.labels = self.data_pd['label'].tolist()
             self.seq_assist = self.data_pd['assist'].tolist()
             self.transform = data_transforms('train', self.normlizetype)
         else:
             self.seq_data = self.data_pd['data'].tolist()
-            self.labels = self.data_pd['label'].tolist()
             self.seq_assist = self.data_pd['assist'].tolist()
             self.transform = None
 
@@ -287,7 +291,7 @@ if __name__ == '__main__':
 
     normlizetype = 'mean-std'
     datasets = {}
-    datasets_train = SQ_Multi(ori_csv_pd,labels_dict, label_index,normlizetype, is_train=True,data_num=20)
+    datasets_train = SQ_Multi(ori_csv_pd,labels_dict, label_index,normlizetype, is_train=True,data_num=20,use_label=True)
 
     target_label = 29
     tra,cal=split_dataset(datasets_train,target_label,isprint=True)

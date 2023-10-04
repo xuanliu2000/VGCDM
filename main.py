@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+import math
 # from diffusion.diffusion_1d import Unet1D, GaussianDiffusion1D
 from model.diffusion.Unet1D import Unet1D_crossatt,Unet1D
 from model.diffusion.diffusion import GaussianDiffusion1D
@@ -69,7 +70,7 @@ if index=='SQ':
         dataset_type='SQ',
         b=Batch_Size,
         normlizetype=norm_type,
-        rpm=19,
+        #rpm=19,
         state='normal',
         data_num=data_num,
         length=length,
@@ -86,7 +87,7 @@ elif index=='SQ_M':
         dataset_type='SQ_M',
         b=Batch_Size,
         normlizetype=norm_type,
-        rpm=19,
+        #rpm=19,
         state='outer3', # normal,inner,outer
         data_num=data_num,
         length=length,
@@ -173,6 +174,14 @@ logger.info("train_num:{};val_num:{}".format(len(train_dataset),len(val_dataset)
 # define beta schedule
 def linear_beta_schedule(timesteps,beta_start = 0.0001,beta_end = 0.02):
     return torch.linspace(beta_start, beta_end, timesteps)
+
+def cosine_beta_schedule(timesteps, s = 0.008):
+    steps = timesteps + 1
+    x = torch.linspace(0, timesteps, steps, dtype = torch.float64)
+    alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
+    alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
+    betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
+    return torch.clip(betas, 0, 0.999)
 
 betas = linear_beta_schedule(
     timesteps=timesteps,

@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 from matplotlib.pylab import mpl
 import librosa
 import numpy as np
-from .evaluate_utils import rmse,psnr
 from matplotlib.ticker import FormatStrFormatter
 mpl.rcParams['font.sans-serif'] = ['simhei']  # 显示中文
 mpl.rcParams['axes.unicode_minus'] = False  # 显示负号
@@ -38,7 +37,6 @@ def plot_np(y, z=None,patch=8,  show_mode='time', sample_rate=12000,path=None,):
         L = y.shape[0]
         H = L // patch if L % patch == 0 else L // patch + 1
         fig, axs = plt.subplots(H, patch, sharex=True, sharey=True, figsize=(patch * 6, H * 2))
-
 
 
     for i in range(L):
@@ -216,6 +214,7 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
             ax.set_xlabel('')
             ax.set_ylabel('')
             plt.tight_layout()
+            # plt.style.use('seaborn-v0_8-darkgrid')
             fig.subplots_adjust(wspace=0.2, hspace=0.1, left=0.1, right=0.9, top=0.9, bottom=0.1)
             # fig.text(0.5, 0.04, 'time/second', ha='center', va='center', fontsize=16)
             # fig.text(0.09, 0.5, 'magrantide/g', ha='center', va='center', rotation='vertical', fontsize=16)
@@ -270,6 +269,85 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
 
     plt.show()
 
+def plot_fre_time(x, y, z1=None, z2=None, patch=8, path=None, sample_rate=12000):
+    fre = 1 / sample_rate
+    color = ['#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000', '#FF69B4', '#3776ab', '#000000']
+
+    L = min(y.shape[0], x.shape[0])
+    H = L // patch if L % patch == 0 else L // patch + 1
+
+    fig, axarr = plt.subplots(2*H, patch, sharex='col', figsize=(patch * 6, 2 * H * 2))
+    if H == 1 and patch == 1:
+        axarr = np.array([[axarr[0]], [axarr[1]]])
+    elif H == 1:
+        axarr = axarr.reshape(2, 1, -1)
+    elif patch == 1:
+        axarr = axarr.reshape(2, -1, 1)
+
+    # Time Domain Plots
+    for i in range(L):
+        row = i // patch
+        col = i % patch
+
+        ax = axarr[row][col]
+        t = np.linspace(0, fre, y.shape[-1])
+
+        ax.plot(t, y[i].reshape(-1), c=color[0], alpha=0.5)
+        ax.plot(t, x[i].reshape(-1), c=color[1], alpha=0.5)
+
+        if z1 is not None:
+            ax2 = ax.twinx()
+            color2 = color[-1]
+            ax2.set_ylabel('Voltage', color=color2)
+            ax2.set_ylim([-6, 6])
+            ax2.plot(t, z1[i].reshape(-1), color=color2, alpha=0.7)
+            ax2.tick_params(axis='y', labelcolor=color2)
+        if z2 is not None:
+            ax3 = ax.twinx()
+            color3 = color[-1]
+            ax3.set_ylabel('Voltage', color=color3)
+            ax3.set_ylim([-6, 6])
+            ax3.plot(t, z2[i].reshape(-1), color=color3, alpha=0.7)
+            ax3.tick_params(axis='y', labelcolor=color3)
+
+        ax.set_xticks([])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+
+    # FFT Plots
+    for i in range(L):
+        row = i // patch
+        col = i % patch
+        ax = axarr[row*2][col]
+        x_fft = np.fft.fft(x[i].reshape(-1))
+        n = len(x_fft)
+        half_X = x_fft[1:n // 2]
+        X_fre = np.fft.fftfreq(n, fre)[1:n // 2]
+
+        y_fft = np.fft.fft(y[i].reshape(-1))
+        half_Y = y_fft[1:n // 2]
+        Y_fre = np.fft.fftfreq(n, fre)[1:n // 2]
+
+        ax.plot(Y_fre, np.abs(half_Y), c=color[0], alpha=0.7)
+        ax.plot(X_fre, np.abs(half_X), c=color[1], alpha=0.7)
+
+        ax.set_xticks([])
+        ax.set_xlabel('')
+        ax.set_ylabel('')
+
+    plt.tight_layout()
+    fig.subplots_adjust(wspace=0.2, hspace=0.1, left=0.1, right=0.9, top=0.9, bottom=0.1)
+
+    if path is not None:
+        plt.savefig(path, dpi=300)
+        print('photo is saved in {}'.format(path))
+
+    plt.show()
+
+
 if __name__ == 'main':
     x1= np.random.random((1,1024))
+    x = np.random.randn(8, 100)
+    y = np.random.randn(8, 100)
+    plot_fre_time(x, y)
     print(x1)
