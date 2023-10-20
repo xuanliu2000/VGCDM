@@ -237,18 +237,28 @@ class GaussianDiffusion1D(nn.Module):
         return pred_img, x_start
 
     @torch.no_grad()
-    def p_sample_loop(self, shape, cond=None):
+    def p_sample_loop(self, shape, cond=None, Save_path=None):
         batch, device = shape[0], self.betas.device
 
         img = torch.randn(shape, device=device)
+        if Save_path is not None:
+            c, h, w = shape[0], shape[1], shape[2]
+            num_images = self.num_timesteps
+            all_images = torch.zeros((num_images, c, h, w), dtype=torch.float32)
+            time_steps = torch.zeros(num_images, dtype=torch.int)
 
         x_start = None
 
-        for t in tqdm(reversed(range(0, self.num_timesteps)), desc = 'sampling loop time step', total = self.num_timesteps):
+        for idx, t in enumerate(tqdm(reversed(range(0, self.num_timesteps)), desc='sampling loop time step', total=self.num_timesteps)):
             self_cond = x_start if self.self_condition else None
             img, x_start = self.p_sample(img, t, self_cond,cond=cond)
+            if Save_path is not None:
+                all_images[idx] = img
+                time_steps[idx] = t
 
         img = self.unnormalize(img)
+        if Save_path is not None:
+            torch.save({'images': all_images, 'time_steps': time_steps}, Save_path+'/images_and_timesteps.pt')
         return img
 
     @torch.no_grad()
@@ -288,10 +298,10 @@ class GaussianDiffusion1D(nn.Module):
         return img
 
     @torch.no_grad()
-    def sample(self, batch_size = 16,cond=None):
+    def sample(self, batch_size = 16,cond=None,Save_path=None):
         seq_length, channels = self.seq_length, self.channels
         sample_fn = self.p_sample_loop if not self.is_ddim_sampling else self.ddim_sample
-        return sample_fn((batch_size, channels, seq_length),cond=cond)
+        return sample_fn((batch_size, channels, seq_length),cond=cond,Save_path=Save_path)
 
     @torch.no_grad()
     def interpolate(self, x1, x2, t = None, lam = 0.5):

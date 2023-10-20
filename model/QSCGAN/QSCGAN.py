@@ -10,36 +10,55 @@ def weights_init(m):
         nn.init.normal_(m.weight.data, 1.0, 0.02)
         nn.init.constant_(m.bias.data, 0)
 
+def spectral_normalize_matrix(matrix):
+    singular_values = torch.svd(matrix).S
+    spectral_norm = singular_values[0]
+    return matrix / spectral_norm
+
+def spectral_normalize_tensor(tensor):
+    normalized_tensor = tensor / torch.svd(tensor)[1].max(dim=-1, keepdim=True).values[..., None]
+    return normalized_tensor
+    # batch_size = tensor.size(0)
+    # normalized_tensor = torch.zeros_like(tensor)
+    # for i in range(batch_size):
+    #     normalized_tensor[i] = spectral_normalize_matrix(tensor[i])
+    # return normalized_tensor
+
 class Discriminator(nn.Module):
     def __init__(self):
         super().__init__()
-        self.main = nn.Sequential(
-            # input 1824
+        self.conv1 = nn.Sequential(
             nn.Conv1d(1, 64, kernel_size=4, stride=2, padding=1, bias=False),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size 912
+            nn.LeakyReLU(0.2, inplace=True))
+        self.conv2 = nn.Sequential(
             nn.Conv1d(64, 128, kernel_size=4, stride=2, padding=1, bias=False),
             nn.BatchNorm1d(128),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size 456
+            nn.LeakyReLU(0.2, inplace=True))
+        self.conv3 = nn.Sequential(
             nn.Conv1d(128, 256, kernel_size=4,
                       stride=2, padding=1, bias=False),
             nn.BatchNorm1d(256),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size 228
-            SpatialSelfAttention(256),
+            nn.LeakyReLU(0.2, inplace=True))
 
+        self.att=SpatialSelfAttention(128)
+        self.conv4 = nn.Sequential(
             nn.Conv1d(256, 512, kernel_size=4,
                       stride=2, padding=1, bias=False),
             nn.BatchNorm1d(512),
-            nn.LeakyReLU(0.2, inplace=True),
-            # state size 114
+            nn.LeakyReLU(0.2, inplace=True))
+        self.conv5 = nn.Sequential(
             nn.Conv1d(512, 1, kernel_size=128, stride=1, padding=0, bias=False),
             nn.Sigmoid()
         )
 
     def forward(self, x, y=None):
-        x = self.main(x)
+        x = self.conv1(x)
+        x = self.conv2(x)
+        x = self.att(x)
+        x = self.conv3(x)
+        x = spectral_normalize_tensor(x)
+        x = self.conv4(x)
+        x = self.conv5(x)
         return x
 
 
@@ -59,7 +78,7 @@ class Generator(nn.Module):
             nn.BatchNorm1d(128),
             nn.ReLU(True))
 
-        self.att=SpatialSelfAttention(128)
+        self.attT=SpatialSelfAttention(128)
 
         self.convT4 = nn.Sequential(
 
@@ -78,8 +97,9 @@ class Generator(nn.Module):
     def forward(self, x):
         x=self.convT1(x)
         x = self.convT2(x)
+        x = spectral_normalize_tensor(x)
         x = self.convT3(x)
-        x= self.att(x)
+        x= self.attT(x)
         x = self.convT4(x)
         x = self.convT5(x)
         return x
@@ -87,8 +107,6 @@ class Generator(nn.Module):
 
 if __name__ == "__main__":
     batch_size = 64
-
-
     noise = torch.randn(batch_size, 256,1)
     G = Generator(256)
     D = Discriminator()

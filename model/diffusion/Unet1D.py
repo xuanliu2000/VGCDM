@@ -504,7 +504,7 @@ class Unet1D_crossatt(nn.Module):
         self.final_res_block = block_klass(dim * 2, dim, time_emb_dim=time_dim)
         self.final_conv = nn.Conv1d(dim, self.out_dim, kernel_size=7, padding=(7 - 1) // 2, dilation=1, bias=True)
 
-    def forward(self, x, time, x_self_cond=None,context=None,return_features=False):
+    def forward(self, x, time, x_self_cond=None,context=None):
 
         b,c,l=x.shape
         if self.self_condition:
@@ -526,7 +526,7 @@ class Unet1D_crossatt(nn.Module):
             x = block2(x, t)
             if self.use_crossatt:
                 cond_list = [context for i in range(c)]
-                cond = torch.cat(cond_list, 1)
+                cond = torch.cat(cond_list, dim=1)
                 x= attn(x,cond)
             else:
                 x = attn(x)

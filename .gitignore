@@ -12,3 +12,4 @@
 /.ipynb_checkpoints/
 !/.ipynb_checkpoints/
 
+!/dataset/HS.py

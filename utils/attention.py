@@ -205,8 +205,8 @@ class SpatialTransformer(nn.Module):
 
         x = rearrange(x, 'b c l -> b l c')
         x = self.proj_out(x)
-        torch.save(x, './results/attention{}.pt')
-        print('attention score',x)
+        # torch.save(x, './results/attention{}.pt')
+        # print('attention score',x)
         return x + x_in
 
 

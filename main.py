@@ -32,8 +32,9 @@ def default_dir(dir):
 output_dir = "./output"
 default_dir(output_dir)
 Batch_Size = 32
-norm_type = '1-1'
-index='SQ_M'
+norm_type = '1-1' # recommend 1-1
+index='SQ_M' # add _M for (inputs, labels,context) else (input, labels)
+data_state='normal' # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV: NC,IF(1,2,3),OF(1,2,3)
 
 length=2048
 data_num='all'
@@ -52,12 +53,12 @@ logger.info("index:{},norm_type:{};data_num:{}"
 
 # diffusion para
 dif_object = 'pred_v'
-beta_schedule= 'linear'
+beta_schedule= 'cosine'
 beta_start = 0.0001
 beta_end = 0.02
 timesteps = 1000
 epochs = 200
-loss_type='huber'
+loss_type='l2'
 
 logger.info("dif_object:{},beta_schedule:{},beta:{}-{};epochs:{};diffusion time step:{};loss type:{}"
                 .format(dif_object,beta_schedule,beta_start,beta_end,epochs,timesteps,loss_type))
@@ -65,13 +66,13 @@ logger.info("dif_object:{},beta_schedule:{},beta:{}-{};epochs:{};diffusion time 
 #use gpu
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-if index=='SQ':
+if index=='SQ' or index=='SQV':
     datasets,SQ_data,cond=build_dataset(
-        dataset_type='SQ',
+        dataset_type=index,
         b=Batch_Size,
         normlizetype=norm_type,
         #rpm=19,
-        state='normal',
+        state=data_state, # SQ: normal,inner(1,2,3),outer(1,2,3) SQV: NC,IF(1,2,3),OF(1,2,3)
         data_num=data_num,
         length=length,
         )
@@ -81,14 +82,30 @@ if index=='SQ':
         replace=False)
     data_np = np.array(SQ_data)[indices]
     sr = 25600
+#
+# elif index=='SQV':
+#     datasets,SQ_data,cond=build_dataset(
+#         dataset_type='SQV',
+#         b=Batch_Size,
+#         normlizetype=norm_type,
+#         state='NC',
+#         data_num=data_num,
+#         length=length,
+#     )
+#     indices = np.random.choice(
+#         len(SQ_data),
+#         size=Batch_Size,
+#         replace=False)
+#     data_np = np.array(SQ_data)[indices]
+#     sr = 25600
 
-elif index=='SQ_M':
+elif index=='SQ_M' or index=='SQV_M':
     datasets,SQ_data,cond,SQ_C=build_dataset(
-        dataset_type='SQ_M',
+        dataset_type=index,
         b=Batch_Size,
         normlizetype=norm_type,
-        #rpm=19,
-        state='outer3', # normal,inner,outer
+        #rpm=19, #SQ:9,19,29,39
+        state=data_state, # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV_M: NC,IF(1,2,3),OF(1,2,3)
         data_num=data_num,
         length=length,
         )
@@ -100,38 +117,22 @@ elif index=='SQ_M':
     cond_np= np.array(SQ_C)[indices]
     sr = 25600
 
-elif index=='SQV':
-    datasets,SQ_data,cond=build_dataset(
-        dataset_type='SQV',
-        b=Batch_Size,
-        normlizetype=norm_type,
-        state='NC',
-        data_num=data_num,
-        length=length,
-    )
-    indices = np.random.choice(
-        len(SQ_data),
-        size=Batch_Size,
-        replace=False)
-    data_np = np.array(SQ_data)[indices]
-    sr = 25600
-
-elif index=='SQV_M':
-    datasets,SQV_data,cond,SQV_C=build_dataset(
-        dataset_type='SQV_M',
-        b=Batch_Size,
-        normlizetype=norm_type,
-        state='OF_3',
-        data_num=data_num,
-        length=length,
-        )
-    indices = np.random.choice(
-        len(SQV_data),
-        size=Batch_Size,
-        replace=False)
-    data_np = np.array(SQV_data)[indices]
-    cond_np= np.array(SQV_C)[indices]
-    sr = 25600
+# elif index=='SQV_M':
+#     datasets,SQV_data,cond,SQV_C=build_dataset(
+#         dataset_type='SQV_M',
+#         b=Batch_Size,
+#         normlizetype=norm_type,
+#         state='NC',
+#         data_num=data_num,
+#         length=length,
+#         )
+#     indices = np.random.choice(
+#         len(SQV_data),
+#         size=Batch_Size,
+#         replace=False)
+#     data_np = np.array(SQV_data)[indices]
+#     cond_np= np.array(SQV_C)[indices]
+#     sr = 25600
 
 elif index=='CW':
     datasets, data_np, cond = build_dataset(
@@ -177,16 +178,19 @@ def linear_beta_schedule(timesteps,beta_start = 0.0001,beta_end = 0.02):
 
 def cosine_beta_schedule(timesteps, s = 0.008):
     steps = timesteps + 1
-    x = torch.linspace(0, timesteps, steps, dtype = torch.float64)
+    x = torch.linspace(0, timesteps, steps, dtype = torch.float)
     alphas_cumprod = torch.cos(((x / timesteps) + s) / (1 + s) * math.pi * 0.5) ** 2
     alphas_cumprod = alphas_cumprod / alphas_cumprod[0]
     betas = 1 - (alphas_cumprod[1:] / alphas_cumprod[:-1])
     return torch.clip(betas, 0, 0.999)
 
-betas = linear_beta_schedule(
-    timesteps=timesteps,
-    beta_start=beta_start,
-    beta_end=beta_end)
+if beta_schedule =='cosine':
+    betas = cosine_beta_schedule(timesteps)
+else:
+    betas = linear_beta_schedule(
+        timesteps=timesteps,
+        beta_start=beta_start,
+        beta_end=beta_end)
 
 #define alphas
 alphas = 1. - betas
@@ -240,20 +244,12 @@ model = Unet1D_crossatt(
     dim=32,
     num_layers=4,
     dim_mults=(1, 2, 4, 8),
-    #context_dim=length,
+    context_dim=length,
     channels=1,
-    use_crossatt=False
+    use_crossatt=True,
 )
-# model=Unet1D(
-#     dim=32,
-#     num_layers=4,
-#     dim_mults=(1, 2, 4, 8),
-#     channels=1,
-# )
-
 
 model.to(device)
-
 
 optimizer = AdamW(params=model.parameters(),lr=1e-4,betas=(0.9, 0.999), eps=1e-08,weight_decay=0.1)
 scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
@@ -281,7 +277,6 @@ for epoch in range(epochs):
       # Algorithm 1 line 3: sample t uniformally for every example in the batch
       t = torch.randint(0, timesteps, (batch_size,), device=device).long()
       loss = p_losses(model, batch, t, loss_type=loss_type,context=context)
-
       if step % 100 == 0:
         learning_rate = optimizer.param_groups[0]['lr']
         memory_used = torch.cuda.max_memory_allocated() / (1024.0 * 1024.0)
