@@ -35,7 +35,7 @@ def plot_label_counts(label_counter):
     # 显示图形
     plt.show()
 
-def filter_df_by_labels(df, labels_dict):
+def hs_filter_df_by_labels(df, labels_dict):
     '''
     df: Input pandas dataframe with data path and labels
     labels_dict: Dictionary with label column names as keys and label values/ranges as values.
@@ -60,7 +60,7 @@ def create_labels_dict(**kwargs):
     """
     return kwargs
 
-def get_files(dir,is_train=True,**kwargs):
+def get_files(dir,is_train=True,mutli=None,**kwargs):
     '''
 
     :param dir: csv direction, pd.dataframe
@@ -68,18 +68,40 @@ def get_files(dir,is_train=True,**kwargs):
     '''
     csv_list=dir['path'].tolist()
     index=dir['box'].tolist()
-    data_dict ,label_dict= data_load(csv_list,index,**kwargs)
+    if mutli is None:
+        data_dict ,label_dict= data_load(csv_list,index,**kwargs)
+        return [data_dict ,label_dict]
+    else:
+        data_dict, label_dict = data_load(csv_list, index, **kwargs)
+        assist_dict,_=data_load(csv_list, index,mutli=mutli, **kwargs)
+        return [data_dict, label_dict, assist_dict]
 
-    return [data_dict ,label_dict]
-
-def data_load(dir,labels,length=1024,data_num=20,ch=None):
+def data_load(dir,labels,length=1024,data_num=20,mutli=None,ch=None):
     assert len(dir)==len(labels)
     data_all=[]
     label_all=[]
     # data_dict={}
-    for i in tqdm(range(len(dir))):
+    for i in range(len(dir)):
         data_df = pd.read_csv(dir[i])
-        fl = data_df.iloc[:, 2:].values
+
+        if mutli is None:
+            fl = data_df.iloc[:, 2:].values
+            if ch in range(8):
+                indice = [ch]
+            else:
+                indice = range(8)
+            fl_data = fl[:, indice]
+        else:
+            if isinstance(ch , int):
+                if ch in [0,1,4,5]:
+                    fl = data_df.iloc[:, 0].values.reshape(-1,1)
+                elif ch in [2,3,6,7]:
+                    fl = data_df.iloc[:, 1].values.reshape(-1,1)
+            else:
+                fl = data_df.iloc[:, 0].values.reshape(-1, 1)
+            indice=[0]
+            fl_data = fl
+
         if labels[i]==1:
             box=box1
         elif labels[i]==2:
@@ -87,31 +109,21 @@ def data_load(dir,labels,length=1024,data_num=20,ch=None):
         else:
             raise ('box choose is wrong')
 
-        # 获取第2列的数值并转换为数组
-        if ch == 'V':
-            indice=[1, 3, 5, 7]
-            index_len=4
-        elif ch == 'H':
-            indice = [0, 2, 4, 6]
-            index_len = 4
-        else:
-            indice=range(8)
-            index_len = 8
-        fl_data=fl[:,indice]
             # print(fl.shape)
-        for j in range(index_len):
+        for j in range(len(indice)):
             # print(j,indice[j],box[indice[j]])
             if data_num=='all':
-                print('all_data_num for one csv is', int(fl.shape[0]//length))
+                print(dir[i].split('/')[-3:],'all_data_num for one csv is', int(fl.shape[0]//length))
                 data = [fl_data[start:end,j].reshape(-1,length) for start, end in zip(range(0, fl.shape[0], length),
                                                                         range(length, fl.shape[0] + 1,length))]
             elif data_num< fl.shape[0]//length:
+                print(dir[i].split('/')[-3:], 'data_num for one csv is', data_num)
                 data = [fl_data[i:i+length,j].reshape(-1,length) for i in range(0, data_num*length, length)]
             else:
                 raise ('data length choose wrong')
 
             for k in data:
-                # print('j', j.shape,label_df)
+                # print('j', j.shape)
                 data_all.append(k)
                 label_temp=box[indice[j]]
 
@@ -124,9 +136,9 @@ def data_transforms(dataset_type="train", normlize_type="-1-1"):
         'train': Compose([
             # Reshape(),
             Normalize(normlize_type),
-            RandomAddGaussian(),
-            RandomScale(),
-            RandomStretch(),
+            # RandomAddGaussian(),
+            # RandomScale(),
+            # RandomStretch(),
             # RandomCrop(),
             Retype()
 
@@ -211,27 +223,71 @@ class HS(Dataset):
     def get_class_number(self):
         return  self.cls_no
 
+class HS_Mutli(Dataset):
+
+    def __init__(self, dir, normlizetype, is_train=True,**kwargs):
+        self.data_dir = dir
+        self.normlizetype = normlizetype
+        self.is_train = is_train
+        list_data= get_files(self.data_dir, is_train=self.is_train,mutli=True,**kwargs)
+        self.data_pd = pd.DataFrame({"data": list_data[0], "label": list_data[1],'assist':list_data[2]})
+        self.cls_num=set(list_data[1])
+        self.cls_no=convert_labels_to_numbers( self.cls_num)
+
+        if self.is_train:
+            self.seq_data = self.data_pd['data'].tolist()
+            self.labels = [self.cls_no[label] for label in self.data_pd['label'].tolist()]
+            self.transform = data_transforms('train', self.normlizetype)
+            self.seq_assist = self.data_pd['assist'].tolist()
+        else:
+            self.seq_data = self.data_pd['data'].tolist()
+            self.labels = [self.cls_no[label] for label in self.data_pd['label'].tolist()]
+            self.transform = None
+            self.seq_assist = self.data_pd['assist'].tolist()
+
+    def __len__(self):
+        return len(self.data_pd)
+
+    def __getitem__(self, idx):
+
+        data = self.seq_data[idx]
+        if self.transform:
+            data = self.transform(data)
+        data= data
+        label = self.labels[idx]
+        assist=self.seq_assist[idx]
+
+        return data, label,assist
+
+    def get_classes_num(self):
+        return len(self.cls_num)# num, name
+
+    def get_class_number(self):
+        return  self.cls_no
+
 if __name__ == '__main__':
     ori_root = '/home/lucian/Documents/datas/Graduate_data/Highspeed_train/dataframe.csv'
     ori_csv_pd = pd.read_csv(ori_root)
     # print(df.info)
-    labels_dict = create_labels_dict(speed=(50,100))
+    labels_dict = create_labels_dict(speed=(100,350),box=1)
     # label=['path','label_all','box','rpm','load','state']
 
     # labels_dict={}
-    df_out = filter_df_by_labels(ori_csv_pd, labels_dict)
+    df_out = hs_filter_df_by_labels(ori_csv_pd, labels_dict)
     # print(df_out.info)
     # out=get_files(df_out,data_num=20)
 
     normlizetype = 'mean-std'
     datasets = {}
-    datasets_train = HS(df_out, normlizetype, is_train=True,data_num=20,ch='V')
-    train_dataloader, val_dataloader = get_loaders(datasets_train, seed=5, batch=128)
+    # datasets_train = HS(df_out, normlizetype, is_train=True,data_num=20,ch='V')
 
-    for id, (data, label) in enumerate(train_dataloader):
-        print(id, data.shape, label)
-    # datasets_test = HS(df_out,label_index, normlizetype, is_train=False)
-    cls_num_=datasets_train.get_classes_num()
-    cls=datasets_train.get_class_number()
+    datasets_train = HS_Mutli(df_out, normlizetype, is_train=True, data_num=10, ch=3)
+    # train_dataloader, val_dataloader = get_loaders(datasets_train, seed=5, batch=128)
+    #
+    # for id, (data, label) in enumerate(train_dataloader):
+    #     print(id, data.shape, label)
+    # # datasets_test = HS(df_out,label_index, normlizetype, is_train=False)
+    # cls_num_=datasets_train.get_classes_num()
+    # cls=datasets_train.get_class_number()
 
 

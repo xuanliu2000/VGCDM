@@ -4,8 +4,9 @@ from sklearn.model_selection import StratifiedShuffleSplit
 from torch.utils.data import DataLoader, Subset, random_split
 
 from .CWRU import CWRU
-from .SQ import SQ, SQ_Multi
+from .SQ import SQ, SQ_Mutli
 from .SQV import SQV_Multi, SQV
+from .HS import HS_Mutli,hs_filter_df_by_labels
 
 
 def check_dict(key,dict):
@@ -17,7 +18,7 @@ def create_labels_dict(**kwargs):
     *args: Specify the label column names as positional arguments.
     **kwargs: Key-value pairs where keys are label names and values are desired label values.
     """
-    sq_index={'rpm','state','path','label'}
+    sq_index={'rpm','state','path','label','speed','box'}
     labels_dict = {}
 
     # Add labels specified as key-value pairs
@@ -98,9 +99,10 @@ def get_loaders(train_dataset,
         val_subset = Subset(train_dataset, rest_indices)
         return train_subset,val_subset
 
-def build_dataset(dataset_type,b=128, normlizetype = '1-1',**kwargs):
+def build_dataset(dataset_type,b=128, normlizetype = '1-1',logger=None,**kwargs):
     # For CW dataset
     # k=[0-9]
+    print('build dataset,set kwargs is', kwargs)
     if dataset_type == 'CW':
         data_dir = "/home/lucian/Documents/datas/CW"
         normlizetype = '1-1'
@@ -143,7 +145,7 @@ def build_dataset(dataset_type,b=128, normlizetype = '1-1',**kwargs):
             state = 'all_state'
         label_index = 'rpm'
 
-        datasets_train = SQ_Multi(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True,**kwargs)
+        datasets_train = SQ_Mutli(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, **kwargs)
         datasets = {'train': datasets_train}
         sq_data = []
         sq_cond = []
@@ -191,6 +193,34 @@ def build_dataset(dataset_type,b=128, normlizetype = '1-1',**kwargs):
         condition = '_sqv_multi_' + labels_dict['state']
         return datasets,sqv_np,condition,sqv_c
 
+    elif dataset_type == 'HS_M':
+        ori_root = '/home/lucian/Documents/datas/Graduate_data/Highspeed_train/dataframe.csv'
+        ori_csv_pd = pd.read_csv(ori_root)
+        labels_dict = create_labels_dict(**kwargs)
+        df_out = hs_filter_df_by_labels(ori_csv_pd,labels_dict)
+        if check_dict('speed',labels_dict):
+            speed=labels_dict.get('speed')
+            kwargs.pop('speed',None)
+        else:
+            speed='all_speed'
+        print(kwargs)
+        if check_dict('box',labels_dict):
+            kwargs.pop('box',None)
+        print(kwargs)
+
+        datasets_train = HS_Mutli(df_out, normlizetype, is_train=True, **kwargs)
+        datasets = {'train': datasets_train}
+        hs_data = []
+        hs_cond = []
+        for data, _, cond in datasets['train']:
+            hs_data.append(data)
+            hs_cond.append(cond)
+        indices = np.random.choice(len(hs_data), size=b, replace=False)
+        hs_np = np.array(hs_data)[indices]
+        hs_c=np.array(hs_cond)[indices]
+        condition =  '_hs_speed_' + str(speed[0])+'_'+str(speed[1]) +'kmh'
+        return datasets,hs_np,condition,hs_c
+
     else:
-        print("Invalid dataset_type. Choose 'CW','SQ' or 'SQV")
+        print("Invalid dataset_type. Choose 'CW','SQ','SQ_M or 'SQV','SQV_M','HS_M'")
 

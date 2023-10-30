@@ -13,3 +13,4 @@
 !/.ipynb_checkpoints/
 
 !/dataset/HS.py
+!/model/diffusion/diffusion.py

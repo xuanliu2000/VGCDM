@@ -33,11 +33,11 @@ output_dir = "./output"
 default_dir(output_dir)
 Batch_Size = 32
 norm_type = '1-1' # recommend 1-1
-index='SQ_M' # add _M for (inputs, labels,context) else (input, labels)
-data_state='normal' # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV: NC,IF(1,2,3),OF(1,2,3)
+index='HS_M' # add _M for (inputs, labels,context) else (input, labels)
+data_state='outer3' # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV: NC,IF(1,2,3),OF(1,2,3)
 
 length=2048
-data_num='all'
+data_num=10
 patch = 8 if Batch_Size >= 64 else 4
 
 
@@ -53,12 +53,12 @@ logger.info("index:{},norm_type:{};data_num:{}"
 
 # diffusion para
 dif_object = 'pred_v'
-beta_schedule= 'cosine'
+beta_schedule= 'linear' ## linear
 beta_start = 0.0001
 beta_end = 0.02
 timesteps = 1000
 epochs = 200
-loss_type='l2'
+loss_type='huber' # l1,l2,huber
 
 logger.info("dif_object:{},beta_schedule:{},beta:{}-{};epochs:{};diffusion time step:{};loss type:{}"
                 .format(dif_object,beta_schedule,beta_start,beta_end,epochs,timesteps,loss_type))
@@ -71,7 +71,7 @@ if index=='SQ' or index=='SQV':
         dataset_type=index,
         b=Batch_Size,
         normlizetype=norm_type,
-        #rpm=19,
+        rpm=19,
         state=data_state, # SQ: normal,inner(1,2,3),outer(1,2,3) SQV: NC,IF(1,2,3),OF(1,2,3)
         data_num=data_num,
         length=length,
@@ -82,29 +82,13 @@ if index=='SQ' or index=='SQV':
         replace=False)
     data_np = np.array(SQ_data)[indices]
     sr = 25600
-#
-# elif index=='SQV':
-#     datasets,SQ_data,cond=build_dataset(
-#         dataset_type='SQV',
-#         b=Batch_Size,
-#         normlizetype=norm_type,
-#         state='NC',
-#         data_num=data_num,
-#         length=length,
-#     )
-#     indices = np.random.choice(
-#         len(SQ_data),
-#         size=Batch_Size,
-#         replace=False)
-#     data_np = np.array(SQ_data)[indices]
-#     sr = 25600
 
 elif index=='SQ_M' or index=='SQV_M':
     datasets,SQ_data,cond,SQ_C=build_dataset(
         dataset_type=index,
         b=Batch_Size,
         normlizetype=norm_type,
-        #rpm=19, #SQ:9,19,29,39
+        rpm=19, #SQ:9,19,29,39
         state=data_state, # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV_M: NC,IF(1,2,3),OF(1,2,3)
         data_num=data_num,
         length=length,
@@ -117,22 +101,25 @@ elif index=='SQ_M' or index=='SQV_M':
     cond_np= np.array(SQ_C)[indices]
     sr = 25600
 
-# elif index=='SQV_M':
-#     datasets,SQV_data,cond,SQV_C=build_dataset(
-#         dataset_type='SQV_M',
-#         b=Batch_Size,
-#         normlizetype=norm_type,
-#         state='NC',
-#         data_num=data_num,
-#         length=length,
-#         )
-#     indices = np.random.choice(
-#         len(SQV_data),
-#         size=Batch_Size,
-#         replace=False)
-#     data_np = np.array(SQV_data)[indices]
-#     cond_np= np.array(SQV_C)[indices]
-#     sr = 25600
+elif index=='HS_M':
+    datasets,SQ_data,cond,SQ_C=build_dataset(
+        dataset_type=index,
+        b=Batch_Size,
+        normlizetype=norm_type,
+        #rpm=19, #SQ:9,19,29,39
+        box=1,
+        speed=(100,350), # SQ_M: normal,inner(1,2,3),outer(1,2,3) SQV_M: NC,IF(1,2,3),OF(1,2,3)
+        data_num=data_num,
+        length=length,
+        ch=7,
+        )
+    indices = np.random.choice(
+        len(SQ_data),
+        size=Batch_Size,
+        replace=False)
+    data_np = np.array(SQ_data)[indices]
+    cond_np= np.array(SQ_C)[indices]
+    sr = 25600
 
 elif index=='CW':
     datasets, data_np, cond = build_dataset(
@@ -154,12 +141,6 @@ if '_M' in index:
 else:
     plot_np(y=data_np,patch=patch,path= ori_path,show_mode=False)
 
-# if index in ['SQ' , 'SQ_M']:
-#     target_label=19
-#     train_dataset,val_dataset=split_dataset(datasets['train'],target_label)
-#     train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True)
-#     val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=True,drop_last=True)
-# else:
 train_dataset,val_dataset=get_loaders(
     datasets['train'],
     val_ratio=0.3,
@@ -170,7 +151,6 @@ train_dataset,val_dataset=get_loaders(
 train_dataloader = DataLoader(train_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8)
 val_dataloader = DataLoader(val_dataset, batch_size=Batch_Size, shuffle=True,num_workers=8,drop_last=True)
 logger.info("train_num:{};val_num:{}".format(len(train_dataset),len(val_dataset)))
-
 
 # define beta schedule
 def linear_beta_schedule(timesteps,beta_start = 0.0001,beta_end = 0.02):
@@ -244,15 +224,15 @@ model = Unet1D_crossatt(
     dim=32,
     num_layers=4,
     dim_mults=(1, 2, 4, 8),
-    context_dim=length,
+    context_dim= length,
     channels=1,
-    use_crossatt=True,
+    use_crossatt=True, # True for VGCDM, False for DDPM
 )
 
 model.to(device)
 
 optimizer = AdamW(params=model.parameters(),lr=1e-4,betas=(0.9, 0.999), eps=1e-08,weight_decay=0.1)
-scheduler = lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.1)
+scheduler = lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1)
 # optimizer = Adam(model.parameters(), lr=1e-4)
 
 diffusion = GaussianDiffusion1D(
@@ -265,7 +245,6 @@ diffusion = GaussianDiffusion1D(
 )
 
 diffusion.to(device)
-
 
 for epoch in range(epochs):
     for step, (inputs, labels,context) in enumerate(train_dataloader):
@@ -294,6 +273,7 @@ if save_index is True:
         f'./pretrained/{index}/best_{cur_time}_{cond}.pt',
         f'./results/{index}/{cur_time}_{cond}.csv',
     ]
+    logger.info("pretrain_path:{},results_path:{}".format(paths[0],paths[1]))
     for path in paths:
         dirname = os.path.dirname(path)
         Path(dirname).mkdir(parents=True, exist_ok=True)
@@ -314,7 +294,7 @@ for batch in val_dataloader:
     B=val_input.shape[0]
 
     if '_M' in index:
-        sampled_seq = diffusion.sample(batch_size=B)#, cond=val_conds)
+        sampled_seq = diffusion.sample(batch_size=B, cond=val_conds)
         evl_out = eval_all(sampled_seq.detach().cpu().numpy(), val_input.detach().cpu().numpy())
         all_val_inputs.append(val_input)
         all_val_conds.append(val_conds)
@@ -339,6 +319,7 @@ all_frecos = np.concatenate(all_cos, axis=None).reshape(-1)
 cos_mean, cos_var = get_mean_dev(all_frecos)
 print('fre_cos', cos_mean, cos_var, all_frecos)
 print('All_eval', rsme_mean, rsme_var, psnr_mean, psnr_var, cos_mean, cos_var)
+logger.info("All_eval-rsme:{}/{},psnr:{}/{},cos:{}/{}".format(rsme_mean, rsme_var, psnr_mean, psnr_var, cos_mean, cos_var))
 
 # for i in range(16):
 out_path=cond+'_out.png'
@@ -348,6 +329,8 @@ val_data_path=os.path.join(time_out_dir,cur_time+cond+'.npy')
 val_in=all_val_inputs[:Batch_Size].cuda().data.cpu().numpy()
 val_conds_out=all_val_conds[:Batch_Size].cuda().data.cpu().numpy()
 out_npy=np.concatenate((out_np,val_in,val_conds_out),axis=1)
+
+# out_npy=np.concatenate((out_np,val_in),axis=1)
 np.save(val_data_path,arr=out_npy)
 
 # add condition in plot when use cross attention

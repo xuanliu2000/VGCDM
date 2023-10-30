@@ -171,7 +171,7 @@ def plot_single_np(y, z=None, sample_rate=25600, path=None,use_lable=None):
 
 def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample_rate=12000):
     fre=1/sample_rate
-    color = ['#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000', '#FF69B4', '#3776ab','#000000']
+    color = ['#4A90E2', '#FF9999','#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000', '#FF69B4', '#3776ab','#000000']
     if show_mode=='time':
         L = min(y.shape[0], x.shape[0])
         H = L // patch if L % patch == 0 else L // patch + 1
@@ -199,18 +199,18 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
                 color2 = color[-1]
                 ax2.set_ylabel('Current', color=color2)
                 ax2.set_ylim([-6,6])
-                ax2.plot(t, z1[i].reshape(-1), color=color2, alpha=0.7)
+                ax2.plot(t, z1[i].reshape(-1), color=color2, alpha=0.6)
                 ax2.tick_params(axis='y', labelcolor=color2)
             if z2 is not None:
                 ax3=ax.twinx()
                 color3 = color[-1]
                 ax3.set_ylabel('pulse', color=color3)
                 ax3.set_ylim([-6, 6])
-                ax3.plot(t, z2[i].reshape(-1), color=color3, alpha=0.7)
+                ax3.plot(t, z2[i].reshape(-1), color=color3, alpha=0.6)
                 ax3.tick_params(axis='y', labelcolor=color3)
 
             # ax.set_yticks([])
-            ax.set_xticks([])
+            # ax.set_xticks([])
             ax.set_xlabel('')
             ax.set_ylabel('')
             plt.tight_layout()
@@ -232,7 +232,7 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
         elif patch == 1:
             axarr = axarr.reshape(-1, 1)
 
-        color = ['#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000']
+        color = ['#4A90E2', '#FF9999','#0074D9', '#FF69B4', '#0343DF', '#006400', '#E50000']
 
         for i in range(L):
             row = i // patch
@@ -253,8 +253,8 @@ def plot_two_np(x,y,z1=None,z2=None, patch=8, path=None,show_mode='time', sample
             # ax.stem(X_fre, np.abs(half_X), linefmt='b-', markerfmt='bo')
             # ax.stem(Y_fre, np.abs(half_Y), linefmt='y-', markerfmt='ro')
 
-            ax.set_yticks([])
-            ax.set_xticks([])
+            # ax.set_yticks([])
+            # ax.set_xticks([])
             ax.set_xlabel('')
             ax.set_ylabel('')
             plt.tight_layout()

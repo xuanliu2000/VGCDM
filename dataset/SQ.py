@@ -207,7 +207,7 @@ class SQ(Dataset):
     def get_classes_num(self):
         return len(self.cls_num),self.cls_num # num, name
 
-class SQ_Multi(Dataset):
+class SQ_Mutli(Dataset):
 
     def __init__(self,
                  dir,
@@ -291,7 +291,7 @@ if __name__ == '__main__':
 
     normlizetype = 'mean-std'
     datasets = {}
-    datasets_train = SQ_Multi(ori_csv_pd,labels_dict, label_index,normlizetype, is_train=True,data_num=20,use_label=True)
+    datasets_train = SQ_Mutli(ori_csv_pd, labels_dict, label_index, normlizetype, is_train=True, data_num=20, use_label=True)
 
     target_label = 29
     tra,cal=split_dataset(datasets_train,target_label,isprint=True)
