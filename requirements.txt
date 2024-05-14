@@ -1,0 +1,11 @@
+einops==0.8.0
+librosa==0.10.0.post2
+matplotlib==3.7.1
+numpy==1.23.5
+pandas==1.5.3
+scikit_learn==1.2.2
+scipy==1.13.0
+seaborn==0.13.2
+termcolor==2.4.0
+torch==2.0.0+cu118
+tqdm==4.64.1
