@@ -7,7 +7,7 @@ This repo contains the official implementation for the paper ["Generating HSR Bo
 
 <div align="justify"> We propose the pulse Voltage-Guided Conditional Diffusion Model (VGCDM). VGCDM incorporates pulse voltage as control signals by cross-attention to ensure the alignment of vibration with voltage signals, achieving high-quality vibration generation. Solely straightforward sampling of control voltages can ensure the efficient transformation from Gaussian Noise to vibration signals whether under steady or time-varying scenarios.
 
-![VGCDM.png](..%2F..%2F%E5%85%B1%E4%BA%AB%E5%B7%A5%E4%BD%9C%E6%96%87%E4%BB%B6%E5%A4%B9%2Fshare_file%2Fpaper3%2F%E9%85%8D%E5%9B%BE%2Fmethod%2FVGCDM.png)
+![scr/VGCDM.png](..%2F..%2F%E5%85%B1%E4%BA%AB%E5%B7%A5%E4%BD%9C%E6%96%87%E4%BB%B6%E5%A4%B9%2Fshare_file%2Fpaper3%2F%E9%85%8D%E5%9B%BE%2Fmethod%2FVGCDM.png)
 
 To validate the effectiveness, we conducted two case studies using SQ bearings dataset and high-simulation HSR bogie bearings dataset. The results of our experiments unequivocally confirm that VGCDM outperforms other generative models, achieving the best RSME, PSNR, and FSCS, showing its superiority in conditional HSR bogie vibration signal generation.</div>
 
