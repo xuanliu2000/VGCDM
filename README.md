@@ -1,7 +1,7 @@
 ## Generating HSR Bogie Vibration Signals via Pulse Voltage-Guided Conditional Diffusion Model
 
 --------------------
-This repo contains the official implementation for the paper ["Generating HSR Bogie Vibration Signals via Pulse Voltage-Guided Conditional Diffusion Model"](https://arxiv.org/abs/2311.00496).
+This repo contains the official implementation for the paper ["Generating HSR Bogie Vibration Signals via Pulse Voltage-Guided Conditional Diffusion Model"](https://ieeexplore.ieee.org/document/10740529).
 
 ### Introduction
 
@@ -120,12 +120,13 @@ sampled_seq = diffusion.sample(batch_size=B)
 
 
 ### Citation
-If you use this code for your research, please cite our paper:
+If you benefit from this work, please cite our paper:
 ```
-@article{VGCDM,
-  title={Generating HSR Bogie Vibration Signals via Pulse Voltage-Guided Conditional Diffusion Model},
+@article{Liu2024vgcdm,
   author={Liu, Xuan and Chen, Jinglong and Xie, Jingsong and Chang, Yuanhong},
-  journal={arXiv preprint arXiv:2311.00496},
-  year={2023}
+  journal={IEEE Transactions on Intelligent Transportation Systems}, 
+  title={Generating HSR Bogie Vibration Signals via Pulse Voltage-Guided Conditional Diffusion Model}, 
+  year={2024},
+  pages={1-12}
 }
 ```
